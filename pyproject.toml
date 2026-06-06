@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mrose"
+version = "0.1.0"
+description = "Region-aware diffusion framework for mRNA stability and expression optimization"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "See LICENSE_NOTICE.md"}
+authors = [{name = "mROSE contributors"}]
+
+[tool.setuptools.packages.find]
+include = ["mrose*"]

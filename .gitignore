@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+env/
+.DS_Store
+
+# Training outputs
+outputs/**
+!outputs/.gitkeep
+Model/
+model/
+models/
+checkpoints/
+runs/
+wandb/
+*.pth
+*.pt
+*.ckpt
+*.onnx
+*.log
+
+# Large/local data
+/data/raw/
+/data/processed/
+*.h5
+*.hdf5
+*.npz
+*.npy
+*.pkl
+
+# Keep task-specific miniature examples in Git
+!experiments/**/example/**

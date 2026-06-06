@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+title: "mROSE: mRNA Optimization for Stability and Expression with a diffusion-based generative framework"
+message: "If you use this software, please cite the associated manuscript or repository."
+type: software
+authors:
+  - family-names: Yang
+    given-names: Wenyi
+version: 0.1.0

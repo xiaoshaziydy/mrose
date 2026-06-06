@@ -1,0 +1,29 @@
+{
+  "environment_source": "uploaded environment.yml, local prefix removed",
+  "examples": [
+    {
+      "task": "5utr_mrl_regression",
+      "path": "experiments/5utr_mrl/example",
+      "format": "CSV",
+      "label": "rl"
+    },
+    {
+      "task": "cds_degradation_regression",
+      "path": "experiments/cds_degradation/example/Data",
+      "format": "CSV",
+      "label": "Value"
+    },
+    {
+      "task": "3utr_rbp_binary_classification",
+      "path": "experiments/3utr_rbp/example/AKAP1_HepG2",
+      "format": "FASTA",
+      "label": "class_0/class_1 in header"
+    },
+    {
+      "task": "full_length_stability_regression",
+      "path": "experiments/full_length_stability/example/in_solution_half_life",
+      "format": "CSV",
+      "label": "label"
+    }
+  ]
+}

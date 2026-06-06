@@ -1,0 +1,16 @@
+# Core pip requirements derived from the uploaded DiffRNA environment.
+# For CUDA 11.8 PyTorch wheels, install with:
+#   pip install --extra-index-url https://download.pytorch.org/whl/cu118 -r requirements.txt
+
+numpy==1.26.4
+pandas==2.3.3
+scipy==1.13.1
+scikit-learn==1.5.0
+biopython==1.84
+tqdm==4.66.4
+tensorboard==2.18.0
+optuna==4.6.0
+pyyaml==6.0.3
+torch==2.0.0+cu118
+torchvision==0.15.1+cu118
+torchaudio==2.0.1+cu118
