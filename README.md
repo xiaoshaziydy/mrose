@@ -15,6 +15,12 @@ mROSE models the three major regulatory regions of an mRNA molecule with region-
 
 The manuscript describes mROSE as a conditional latent denoising framework that preserves biological constraints while exploring optimized sequence variants. In experimental validation, mROSE-designed erythropoietin mRNA increased serum protein expression in mice by up to 15.3-fold over the benchmark transcript.
 
+<p align="center">
+  <img src="docs/assets/mrose-figure1.png" alt="Figure 1. Overview of the mROSE workflow" width="900">
+</p>
+
+<p align="center"><em>Figure 1. Overview of the mROSE region-aware mRNA optimization workflow.</em></p>
+
 ## Why mROSE?
 
 Therapeutic mRNA performance depends on sequence features distributed across the 5′ UTR, coding sequence and 3′ UTR. Rule-based design methods such as codon optimization, GC-content tuning or motif depletion can improve selected properties, but they often search only a narrow subset of possible sequence variants.
