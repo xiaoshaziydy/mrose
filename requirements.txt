@@ -1,4 +1,4 @@
-# Core pip requirements derived from the uploaded DiffRNA environment.
+# Core pip requirements derived from the uploaded mROSE environment.
 # For CUDA 11.8 PyTorch wheels, install with:
 #   pip install --extra-index-url https://download.pytorch.org/whl/cu118 -r requirements.txt
 

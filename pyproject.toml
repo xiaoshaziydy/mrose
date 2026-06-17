@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Region-aware diffusion framework for mRNA stability and expression optimization"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "See LICENSE_NOTICE.md"}
+license = {text = "MIT"}
 authors = [{name = "mROSE contributors"}]
 
 [tool.setuptools.packages.find]

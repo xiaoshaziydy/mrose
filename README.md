@@ -122,10 +122,10 @@ mROSE also includes standalone generation entry points for designing region-spec
 The released generation checkpoints are tracked with Git LFS under:
 
 ```text
-checkpoints/generation/
-├── 5UTR_Model.pth
-├── CDS_Model.pth
-└── 3UTR_Model.pth
+generation/
+├── 5utr/Model.pth
+├── cds/Model.pth
+└── 3utr/Model.pth
 ```
 
 Print demo commands and check local dependencies/checkpoints:
@@ -173,4 +173,4 @@ See [CITATION.cff](CITATION.cff) for repository citation metadata.
 
 ## License
 
-A formal open-source license has not yet been selected. See [LICENSE_NOTICE.md](LICENSE_NOTICE.md) before public redistribution or reuse.
+mROSE is released under the [MIT License](LICENSE).

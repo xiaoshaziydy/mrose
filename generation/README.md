@@ -20,10 +20,10 @@ git lfs pull
 The files should be present here:
 
 ```text
-checkpoints/generation/
-├── 5UTR_Model.pth
-├── CDS_Model.pth
-└── 3UTR_Model.pth
+generation/
+├── 5utr/Model.pth
+├── cds/Model.pth
+└── 3utr/Model.pth
 ```
 
 Verify checkpoint integrity:
@@ -64,7 +64,7 @@ Outputs are written under `outputs/generation/`, which is ignored by Git.
 
 ```bash
 python generation/5utr/generate_5utr.py \
-  --checkpoint checkpoints/generation/5UTR_Model.pth \
+  --checkpoint generation/5utr/Model.pth \
   --input_fasta generation/examples/5utr_template.fasta \
   --num_samples 20 \
   --top_k 5 \
@@ -77,7 +77,7 @@ CDS:
 
 ```bash
 python generation/cds/generate_cds.py \
-  --checkpoint checkpoints/generation/CDS_Model.pth \
+  --checkpoint generation/cds/Model.pth \
   --input_fasta generation/examples/cds_template.fasta \
   --num_samples 20 \
   --top_k 5 \
@@ -90,7 +90,7 @@ python generation/cds/generate_cds.py \
 
 ```bash
 python generation/3utr/generate_3utr.py \
-  --checkpoint checkpoints/generation/3UTR_Model.pth \
+  --checkpoint generation/3utr/Model.pth \
   --input_fasta generation/examples/3utr_template.fasta \
   --num_samples 20 \
   --top_k 5 \

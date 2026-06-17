@@ -2157,7 +2157,7 @@ def score_generated_3utrs(model, sequences, device, args):
 
 def main_generate_predict_3utr():
     parser = argparse.ArgumentParser(description="Standalone 3'UTR generation + prediction + TopK selection using one checkpoint")
-    parser.add_argument('--checkpoint', type=str, default='./3UTR_Model.pth', help='Single checkpoint used for both generation and prediction')
+    parser.add_argument('--checkpoint', type=str, default=os.path.join(os.path.dirname(__file__), 'Model.pth'), help='Single checkpoint used for both generation and prediction')
     parser.add_argument('--input_seq', type=str, default='', help="Input 3'UTR sequence")
     parser.add_argument('--input_fasta', type=str, default='', help="Input FASTA file; used when input_seq is empty")
     parser.add_argument('--num_samples', type=int, default=100, help='Number of candidates to generate')

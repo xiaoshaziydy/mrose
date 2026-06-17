@@ -18,15 +18,13 @@ outputs/**
 Model/
 model/
 models/
-checkpoints/*
-!checkpoints/generation/
-!checkpoints/generation/*.pth
+checkpoints/
 runs/
 wandb/
 generated_*/
 generation/outputs/
 *.pth
-!checkpoints/generation/*.pth
+!generation/*/Model.pth
 *.pt
 *.ckpt
 *.onnx

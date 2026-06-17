@@ -2688,7 +2688,7 @@ def parse_args_single_checkpoint():
             'generation and pred_value scoring. Generates 100 candidates by default and selects Top10 with CAI/GC/MFE.'
         )
     )
-    parser.add_argument('--checkpoint', type=str, default='./CDS_Model.pth', help='Same checkpoint used for generation and prediction.')
+    parser.add_argument('--checkpoint', type=str, default=os.path.join(os.path.dirname(__file__), 'Model.pth'), help='Same checkpoint used for generation and prediction.')
     parser.add_argument('--input_seq', type=str, default=None, help='Input CDS sequence. Spaces/newlines are ignored.')
     parser.add_argument('--input_fasta', type=str, default=None, help='Optional FASTA file. The first sequence will be used.')
     parser.add_argument('--num_samples', type=int, default=100)

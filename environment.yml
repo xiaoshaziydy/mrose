@@ -1,4 +1,4 @@
-# Generated from the uploaded DiffRNA environment; local prefix removed for portability.
+# Generated from the uploaded mROSE environment; local prefix removed for portability.
 name: mROSE
 channels:
 - pytorch

@@ -1505,7 +1505,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Standalone 5' UTR generation, prediction, MFE/feature scoring, and Top-k selection"
     )
-    parser.add_argument("--checkpoint", type=str, default='./5UTR_Model.pth',
+    parser.add_argument("--checkpoint", type=str, default=os.path.join(os.path.dirname(__file__), "Model.pth"),
                         help="One checkpoint used for both generation and MRL prediction")
     parser.add_argument("--input_seq", type=str, default=None,
                         help="Input/template 5' UTR sequence. Use this for a raw sequence string.")

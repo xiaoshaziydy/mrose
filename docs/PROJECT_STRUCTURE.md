@@ -30,4 +30,4 @@ Standalone candidate-generation scripts:
 - `3utr/generate_3utr.py`: 3′ UTR generation and ranking.
 - `examples/`: compact FASTA templates used by `scripts/demo_generate_sequences.py`.
 
-Released generation checkpoints are expected under `checkpoints/generation/` and are tracked with Git LFS.
+Released generation checkpoints are expected as `generation/5utr/Model.pth`, `generation/cds/Model.pth` and `generation/3utr/Model.pth`, and are tracked with Git LFS.

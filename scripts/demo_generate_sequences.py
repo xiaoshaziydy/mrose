@@ -21,7 +21,7 @@ TASKS = {
     "5utr": {
         "label": "5' UTR",
         "script": ROOT / "generation" / "5utr" / "generate_5utr.py",
-        "checkpoint": ROOT / "checkpoints" / "generation" / "5UTR_Model.pth",
+        "checkpoint": ROOT / "generation" / "5utr" / "Model.pth",
         "input": ROOT / "generation" / "examples" / "5utr_template.fasta",
         "output_dir": ROOT / "outputs" / "generation" / "5utr_demo",
         "args": [
@@ -34,7 +34,7 @@ TASKS = {
     "cds": {
         "label": "CDS",
         "script": ROOT / "generation" / "cds" / "generate_cds.py",
-        "checkpoint": ROOT / "checkpoints" / "generation" / "CDS_Model.pth",
+        "checkpoint": ROOT / "generation" / "cds" / "Model.pth",
         "input": ROOT / "generation" / "examples" / "cds_template.fasta",
         "output_dir": ROOT / "outputs" / "generation" / "cds_demo",
         "args": [
@@ -47,7 +47,7 @@ TASKS = {
     "3utr": {
         "label": "3' UTR",
         "script": ROOT / "generation" / "3utr" / "generate_3utr.py",
-        "checkpoint": ROOT / "checkpoints" / "generation" / "3UTR_Model.pth",
+        "checkpoint": ROOT / "generation" / "3utr" / "Model.pth",
         "input": ROOT / "generation" / "examples" / "3utr_template.fasta",
         "output_dir": ROOT / "outputs" / "generation" / "3utr_demo",
         "args": [
