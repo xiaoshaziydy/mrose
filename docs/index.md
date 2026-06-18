@@ -29,6 +29,7 @@ This documentation explains how to install the project, run compact examples, us
 
 installation
 generation
+notebooks/mROSE_generation_demo
 experiments
 PROJECT_STRUCTURE
 MANUSCRIPT_OVERVIEW

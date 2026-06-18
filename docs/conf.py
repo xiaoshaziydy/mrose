@@ -14,18 +14,20 @@ copyright = "2026, mROSE contributors"
 release = "0.1.0"
 
 extensions = [
-    "myst_parser",
+    "myst_nb",
 ]
 
 source_suffix = {
     ".rst": "restructuredtext",
-    ".md": "markdown",
+    ".md": "myst-nb",
+    ".ipynb": "myst-nb",
 }
 
 master_doc = "index"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 myst_heading_anchors = 3
+nb_execution_mode = "off"
 
 html_theme = "sphinx_rtd_theme"
 html_title = "mROSE documentation"
