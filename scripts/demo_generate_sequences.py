@@ -85,8 +85,6 @@ def command_for(task: str, python_bin: str) -> list[str]:
 
 def print_status(python_bin: str) -> None:
     print("mROSE generation demo")
-    print(f"Project root: {ROOT}")
-    print()
 
     print("Dependency check:")
     for name in REQUIRED_MODULES:
@@ -98,12 +96,8 @@ def print_status(python_bin: str) -> None:
     print("Checkpoint check:")
     for key, cfg in TASKS.items():
         checkpoint = cfg["checkpoint"]
-        if checkpoint.exists():
-            size_mb = checkpoint.stat().st_size / (1024 * 1024)
-            status = f"OK ({size_mb:.1f} MB)"
-        else:
-            status = "missing"
-        print(f"  {key:4s} {checkpoint.relative_to(ROOT)}: {status}")
+        status = "OK" if checkpoint.exists() else "missing"
+        print(f"  {key:4s} {status}")
     print()
 
     print("Commands:")

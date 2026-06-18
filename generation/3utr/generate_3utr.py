@@ -49,23 +49,23 @@ def create_mask(seq, mask_prob=0.2):
     mask[0] = mask[-1] = False
     return mask
 def compute_features(utr):
-    utr = str(utr).upper() # 确保大写DNA
+    utr = str(utr).upper() # Normalize to uppercase DNA.
     length = len(utr)
     total_codons = length // 3
     if total_codons == 0:
         return {f'codon_{aa}': 0 for aa in ['H','K','I','M','E','F','D','G','T','A','C','Q','S','L','Y','*','P','R','V','W','N']} | \
                {'uAUG': 0, 'uORF': 0, 'CGratio': 0, 'CGperc': 0, 'utrlen_m80': length - 80, 'ATratio': 0, 'TCperc': 0}
-   
-    # 使用BioPython翻译 (frame 1, 忽略末尾不完整)
+
+    # Translate with Biopython in frame 1 and ignore incomplete trailing codons.
     try:
-        seq = Seq(utr[:total_codons * 3]) # 只取完整密码子部分
+        seq = Seq(utr[:total_codons * 3]) # Use only complete codons.
         protein = seq.translate(to_stop=False)
         aas = list(str(protein))
     except Exception:
         aas = []
         total_codons = 0
-   
-    # 统计aa频率
+
+    # Count amino-acid frequencies.
     aa_count = Counter(aas)
     aa_map = {
         'H': 'codon_H', 'K': 'codon_K', 'I': 'codon_I', 'M': 'codon_M', 'E': 'codon_E',
@@ -74,11 +74,11 @@ def compute_features(utr):
         '*': 'codon_*', 'P': 'codon_P', 'R': 'codon_R', 'V': 'codon_V', 'W': 'codon_W', 'N': 'codon_N'
     }
     aa_freq = {aa_map[aa]: aa_count.get(aa, 0) / total_codons for aa in aa_map}
-   
-    # uAUG: 在帧ATG数量
+
+    # uAUG: Count in-frame ATG motifs.
     uaug = sum(1 for i in range(0, total_codons * 3, 3) if utr[i:i+3] == 'ATG')
-   
-    # uORF: 完整ORF数量 (≥3 非终止aa 到 *)
+
+    # uORF: Count complete ORFs with at least three non-stop amino acids before a stop.
     min_orf_length = 3
     uorf = 0
     current_length = 0
@@ -89,28 +89,28 @@ def compute_features(utr):
             current_length = 0
         else:
             current_length += 1
-   
-    # 核苷酸计数
+
+    # Nucleotide counts.
     nuc_count = Counter(utr)
     c_num, g_num = nuc_count['C'], nuc_count['G']
     a_num, t_num = nuc_count['A'], nuc_count['T']
-   
-    # TC含量（RNA中的UC含量，对应DNA中的TC含量）
+
+    # TC content, corresponding to UC content in RNA.
     tcperc = (t_num + c_num) / length if length > 0 else 0
-   
+
     # CGratio
     cgratio = abs(c_num / g_num - 1) if g_num > 0 else 0
-   
+
     # CGperc
     cgperc = (c_num + g_num) / length if length > 0 else 0
-   
+
     # utrlen_m80
     utrlen_m80 = length - 80
-   
+
     # ATratio
     atratio = abs(a_num / t_num - 1) if t_num > 0 else 0
-   
-    # 组合结果
+
+    # Combine feature values.
     result = aa_freq
     result['uAUG'] = uaug
     result['uORF'] = uorf
@@ -133,7 +133,7 @@ class RNADataset(Dataset):
         self.codon_table = codon_table
         self.char_to_idx = char_to_idx
         self.nuc_char_to_idx = nuc_char_to_idx
-       
+
         # Read CSV file
         df = pd.read_csv(csv_file)
         sequences = df['sequence'].tolist()
@@ -158,7 +158,7 @@ class RNADataset(Dataset):
                 rna_sequence = rna_sequence[:self.target_len * 3]
             elif codon_len < self.target_len:
                 rna_sequence = rna_sequence + 'NNN' * (self.target_len - codon_len)
-           
+
             self.rna_sequences.append(rna_sequence) # Codon input
             self.nuc_sequences.append(rna_sequence) # Raw nucleotide input
             self.labels.append(label)
@@ -173,12 +173,12 @@ class RNADataset(Dataset):
             start_idx = codon_idx * 3
             rna_seq = rna_seq[:start_idx] + mutated_codon + rna_seq[start_idx+3:]
             nuc_seq = rna_seq
-       
+
         rna_seq_list = rna_to_idx(rna_seq, self.codon_table, self.char_to_idx)
         rna_seq_with_special = add_special_tokens(rna_seq_list, self.char_to_idx)
         rna_seq_with_special = pad_or_truncate(rna_seq_with_special, self.max_len, self.char_to_idx)
         input_tensor = torch.tensor(rna_seq_with_special, dtype=torch.long)
-       
+
         nuc_seq_list = nuc_to_idx(nuc_seq, self.nuc_char_to_idx)
         nuc_seq_with_special = add_special_tokens_nuc(nuc_seq_list, self.nuc_char_to_idx)
         nuc_seq_with_special = pad_or_truncate_nuc(nuc_seq_with_special, self.nuc_max_len, self.nuc_char_to_idx)
@@ -305,7 +305,7 @@ class NoiseAwareBatchNorm1d(nn.Module):
         self.bn = nn.BatchNorm1d(num_features)
         self.scale = nn.Parameter(torch.ones(1))
         self.shift = nn.Parameter(torch.zeros(1))
-   
+
     def forward(self, x, noise_std):
         x = self.bn(x)
         noise_factor = self.scale * noise_std + self.shift
@@ -453,7 +453,7 @@ class ComplexTransformerUNet1D(nn.Module):
         self.down4 = DoubleConv1DWithTransformer(base_channels * 16, base_channels * 16, num_heads=num_heads, num_layers=num_layers, hidden_dim=hidden_dim)
         self.down5 = DoubleConv1DWithTransformer(base_channels * 16, base_channels * 32, num_heads=num_heads, num_layers=num_layers, hidden_dim=hidden_dim)
         '''
-       
+
         self.down3 = nn.Sequential(
             nn.AvgPool1d(2),
             DoubleConv1DWithTransformer(base_channels * 8, base_channels * 16, num_heads=num_heads, num_layers=num_layers, hidden_dim=hidden_dim)
@@ -462,7 +462,7 @@ class ComplexTransformerUNet1D(nn.Module):
             nn.AvgPool1d(2),
             DoubleConv1DWithTransformer(base_channels * 16, base_channels * 16, num_heads=num_heads, num_layers=num_layers, hidden_dim=hidden_dim)
         )
-       
+
         self.down5 = nn.Sequential(
             nn.AvgPool1d(2),
             DoubleConv1DWithTransformer(base_channels * 16, base_channels * 32, num_heads=num_heads, num_layers=num_layers, hidden_dim=hidden_dim)
@@ -476,7 +476,7 @@ class ComplexTransformerUNet1D(nn.Module):
             nn.AvgPool1d(2),
             DoubleConv1DWithTransformer(base_channels * 16, base_channels * 16, num_heads=num_heads, num_layers=num_layers, hidden_dim=hidden_dim)
         )
-       
+
         #self.down5 = DownWithTransformer(base_channels * 16, base_channels * 32, num_heads=num_heads, num_layers=num_layers, hidden_dim=hidden_dim)
         self.down5 = nn.Sequential(
             nn.AvgPool1d(2),
@@ -539,7 +539,7 @@ class ComplexTransformerUNet1D(nn.Module):
         x6 = self.down5(x5, noise_std)
         '''
         x = self.bottleneck(x6)
-       
+
         x = self.up1[0](x)
         x = self.up1[1](x, x5, noise_std)
         x = self.up2[0](x)
@@ -897,7 +897,7 @@ class VAEWithTransformer(nn.Module):
         else:
             pad_size = target_len - seq_len
             src = F.pad(src, (0, pad_size), value=self.char_to_idx['<PAD>'])
-       
+
         seq_len = target_len
         src_mask = self._generate_square_subsequent_mask(seq_len).to(src.device)
         src_key_padding_mask = (src == self.char_to_idx['<PAD>'])
@@ -930,7 +930,7 @@ class VAEWithTransformer(nn.Module):
         else:
             pad_size = target_len - seq_len
             src_nuc = F.pad(src_nuc, (0, pad_size), value=self.nuc_char_to_idx['<PAD>'])
-       
+
         seq_len = target_len
         src_mask = self._generate_square_subsequent_mask(seq_len).to(src_nuc.device)
         src_key_padding_mask = (src_nuc == self.nuc_char_to_idx['<PAD>'])
@@ -960,7 +960,7 @@ class VAEWithTransformer(nn.Module):
         emb = self.pos_decoder(emb)
         memory = self.transformer_encoder(emb)
         codon_output = self.transformer_decoder(emb, memory)
-       
+
         # Nucleotide decoding
         nuc_tgt_seq_len = nuc_decoder_input.size(1)
         #nuc_h = F.relu(self.fc3(z))
@@ -969,7 +969,7 @@ class VAEWithTransformer(nn.Module):
         nuc_emb = self.nuc_pos_decoder(nuc_emb)
         nuc_memory = self.nuc_transformer_encoder(nuc_emb)
         nuc_output = self.nuc_transformer_decoder(nuc_emb, nuc_memory)
-       
+
         return codon_output, nuc_output
     def constrain_logits(self, logits, src, codon_table, char_to_idx, idx_to_char):
         batch_size, seq_len, vocab_size = logits.size()
@@ -999,7 +999,7 @@ class VAEWithTransformer(nn.Module):
         #nuc_encoder_output = self.downsample_nuc_encoder_output(nuc_encoder_output, max_len)
         #z = self.reparameterize(mu, log_var)
         #z_q, vq_loss, _, _ = self.vector_quantizer(z)
-       
+
         # Codon table (from the original code)
         # Existing noise functions
         def apply_gaussian_noise(tensor, std):
@@ -1079,7 +1079,7 @@ class VAEWithTransformer(nn.Module):
         codon_output, nuc_output = self.decode(decoder_input, nuc_decoder_input)
         logits = self.fc_out(codon_output)
         nuc_logits = self.fc_nuc_out(nuc_output)
-       
+
         denoised_nuc_output_gauss_down = self.downsample_nuc_encoder_output(denoised_nuc_output_gauss, max_len)
         denoised_nuc_output_bio_down = self.downsample_nuc_encoder_output(denoised_nuc_output_bio, max_len)
         combined_features = torch.cat([
@@ -1088,11 +1088,11 @@ class VAEWithTransformer(nn.Module):
             denoised_nuc_output_gauss_down.permute(0, 2, 1),
             denoised_nuc_output_bio_down.permute(0, 2, 1),
         ], dim=1)
-       
+
         cnn_features = self.cnn_feature_extractor(combined_features)
         enhanced_features = torch.cat([cnn_features, features], dim=1)
         class_pred = self.fc_class(enhanced_features)
-       
+
         denoising_loss = (
             F.mse_loss(denoised_output_gauss, encoder_output) +
             #F.mse_loss(denoised_output_uniform, encoder_output) +
@@ -1101,7 +1101,7 @@ class VAEWithTransformer(nn.Module):
             #F.mse_loss(denoised_nuc_output_uniform, nuc_encoder_output) +
             F.mse_loss(denoised_nuc_output_bio, nuc_encoder_output)
         ) / 4.0
-       
+
         return class_pred, logits, nuc_logits, mu, log_var, denoising_loss, codon_global_rep, nuc_global_rep
     def _generate_square_subsequent_mask(self, sz):
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
@@ -1128,12 +1128,12 @@ def contrastive_loss(codon_rep, nuc_rep, temperature=0.1):
 def translate_codon_indices(codon_indices, idx_to_char, codon_table):
     """
     Translates a sequence of codon indices to an amino acid sequence.
-   
+
     Args:
         codon_indices: Tensor of shape (batch_size, seq_len) containing codon indices.
         idx_to_char: Dictionary mapping indices to codon strings.
         codon_table: Dictionary mapping codons to amino acids.
-   
+
     Returns:
         List of amino acid sequences (one per batch).
     """
@@ -1151,16 +1151,16 @@ def translate_codon_indices(codon_indices, idx_to_char, codon_table):
 # New amino acid consistency loss function
 def amino_acid_consistency_loss(logits, targets, idx_to_char, codon_table):
     _, predicted_indices = torch.max(logits, dim=-1) # Shape: (batch_size, seq_len)
-   
+
     # Translate predicted and target codon sequences to amino acid sequences
     pred_aa_sequences = translate_codon_indices(predicted_indices, idx_to_char, codon_table)
     target_aa_sequences = translate_codon_indices(targets, idx_to_char, codon_table)
-   
+
     # Compute mismatch penalty using soft probabilities
     batch_size, seq_len, vocab_size = logits.size()
     mismatches = torch.zeros(1, device=logits.device, requires_grad=True)
     total_positions = 0
-   
+
     for b in range(batch_size):
         pred_aa = pred_aa_sequences[b]
         target_aa = target_aa_sequences[b]
@@ -1174,10 +1174,10 @@ def amino_acid_consistency_loss(logits, targets, idx_to_char, codon_table):
                 target_idx = targets[b, i]
                 mismatches = mismatches + (-log_prob[target_idx])
         total_positions += min_len
-   
+
     if total_positions == 0:
         return torch.tensor(0.0, device=logits.device, requires_grad=True)
-   
+
     aa_loss = mismatches / total_positions
     return aa_loss
 def compute_dispersive_loss(predictions, targets, lambda_weight=1.0):
@@ -1193,7 +1193,7 @@ def loss_function(logits, nuc_logits, tgt, tgt_nuc, mu, logvar, denoising_loss,
                  codon_table=None, idx_to_char=None):
     # Codon reconstruction loss
     cross_entropy_codon = F.cross_entropy(logits.view(-1, logits.size(-1)), tgt.view(-1))
-   
+
     # Downsample tgt_nuc to match nuc_logits sequence length
     batch_size, seq_len = tgt_nuc.size()
     target_len = seq_len // 3
@@ -1206,25 +1206,25 @@ def loss_function(logits, nuc_logits, tgt, tgt_nuc, mu, logvar, denoising_loss,
         # Pad if necessary
         pad_size = target_len - seq_len
         tgt_nuc_downsampled = F.pad(tgt_nuc, (0, pad_size), value=nuc_char_to_idx['<PAD>'])[:, :target_len]
-   
+
     # Nucleotide reconstruction loss
     cross_entropy_nuc = F.cross_entropy(nuc_logits.view(-1, nuc_logits.size(-1)), tgt_nuc.view(-1))
-   
+
     # Combine reconstruction losses as L_Diff
     l_diff = (cross_entropy_codon + cross_entropy_nuc) / 2.0
-   
+
     # KL divergence
     KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-   
+
     # Regression loss (MSE for degradation_rate)
     value_loss = F.mse_loss(value_preds.squeeze(), value_targets)
-   
+
     # Contrastive loss
     contrastive_loss_value = contrastive_loss(codon_rep, nuc_rep, temperature=0.1)
-   
+
     # Amino acid consistency loss
     aa_consistency_loss = amino_acid_consistency_loss(logits, tgt, idx_to_char, codon_table)
-   
+
     # Total loss
     total_loss = (
         l_diff +
@@ -1234,7 +1234,7 @@ def loss_function(logits, nuc_logits, tgt, tgt_nuc, mu, logvar, denoising_loss,
         contrastive_weight * contrastive_loss_value
         #+aa_weight * aa_consistency_loss
     )
-   
+
     return total_loss, contrastive_loss_value, aa_consistency_loss, l_diff, value_loss
 def cosine_noise_schedule(initial_noise_std, max_noise_std, total_epochs):
     def schedule(epoch):
@@ -1256,23 +1256,23 @@ def collate_fn(batch, max_len=256, codon_vocab=None, nuc_vocab=None):
     nuc_target_len = max_len
     max_len_one_hot = target_len
     max_len_nuc_one_hot = nuc_target_len
-   
+
     padded_seqs = torch.full((len(seq_tensors), target_len), codon_vocab['<PAD>'], dtype=torch.long)
     padded_nuc_seqs = torch.full((len(nuc_seq_tensors), nuc_target_len), nuc_vocab['<PAD>'], dtype=torch.long)
-   
+
     for i, (seq, nuc_seq) in enumerate(zip(seq_tensors, nuc_seq_tensors)):
         seq_len = min(seq.size(0), target_len)
         nuc_seq_len = min(nuc_seq.size(0), nuc_target_len)
         padded_seqs[i, :seq_len] = seq[:seq_len]
         padded_nuc_seqs[i, :nuc_seq_len] = nuc_seq[:nuc_seq_len]
-   
+
     return (padded_seqs, padded_nuc_seqs, torch.tensor(labels, dtype=torch.float), torch.stack(feat_tensors))
 class CollateFnWrapper:
     def __init__(self, max_len, codon_vocab, nuc_vocab):
         self.max_len = max_len
         self.codon_vocab = codon_vocab
         self.nuc_vocab = nuc_vocab
-   
+
     def __call__(self, batch):
         return collate_fn(batch, max_len=self.max_len, codon_vocab=self.codon_vocab, nuc_vocab=self.nuc_vocab)
 def get_data_loader(dataset, batch_size, vocab=None, max_len=2048, num_workers=4):
@@ -1299,20 +1299,20 @@ def setup_logging(output_dir):
     log_dir = os.path.join(output_dir, 'logs')
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, f'{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-   
+
     logger = logging.getLogger('main')
     logger.handlers = []
-   
+
     file_handler = logging.FileHandler(log_file)
     file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
-   
+
     stream_handler = logging.StreamHandler()
     stream_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     stream_handler.setFormatter(stream_formatter)
     logger.addHandler(stream_handler)
-   
+
     return logger
 def cleanup_ddp():
     """Clean up DDP process group and ensure all processes are synchronized."""
@@ -1345,17 +1345,17 @@ def train_step(model, optimizer, batch, device, noise_std, max_len, codon_table,
     model.train()
     src, src_nuc, labels, features = batch
     src, src_nuc, labels, features = src.to(device), src_nuc.to(device), labels.to(device).float(), features.to(device)
-   
+
     optimizer.zero_grad(set_to_none=True)
     loss_accum = 0.0
-   
+
     micro_batch_size = max(1, src.size(0) // accum_steps)
     for i in range(0, src.size(0), micro_batch_size):
         micro_src = src[i:i+micro_batch_size]
         micro_src_nuc = src_nuc[i:i+micro_batch_size]
         micro_labels = labels[i:i+micro_batch_size]
         micro_features = features[i:i+micro_batch_size]
-       
+
         value_preds, logits, nuc_logits, mu, log_var, denoising_loss, codon_global_rep, nuc_global_rep = model(
             micro_src, micro_src_nuc, micro_features, noise_std=noise_std, max_len=max_len
         )
@@ -1377,32 +1377,32 @@ def evaluate_model(model, data_loader, device, noise_std, max_len, codon_table, 
     all_labels = []
     total_loss = 0.0
     num_batches = 0
-   
+
     with torch.no_grad():
         for batch in data_loader:
             src, src_nuc, labels, features = batch
             src, src_nuc, labels, features = src.to(device), src_nuc.to(device), labels.to(device).float(), features.to(device)
-           
+
             value_preds, logits, nuc_logits, mu, log_var, denoising_loss, codon_global_rep, nuc_global_rep = model(
                 src, src_nuc, features, noise_std=noise_std, max_len=max_len
             )
-           
+
             all_preds.append(value_preds.squeeze().cpu().numpy())
             all_labels.append(labels.cpu().numpy())
             batch_loss = F.mse_loss(value_preds.squeeze(), labels)
             total_loss += batch_loss.item()
             num_batches += 1
-   
+
     all_preds = np.concatenate(all_preds)
     all_labels = np.concatenate(all_labels)
-   
+
     spearman_corr, _ = spearmanr(all_preds, all_labels)
     pearson_corr, _ = pearsonr(all_preds, all_labels)
     r2 = r2_score(all_labels, all_preds)
     rmse = np.sqrt(mean_squared_error(all_labels, all_preds))
     mae = np.mean(np.abs(all_preds - all_labels))
     avg_loss = total_loss / num_batches
-   
+
     return spearman_corr, pearson_corr, r2, rmse, mae, avg_loss
 class EarlyStopping:
     def __init__(self, patience=10, verbose=False):
@@ -1431,7 +1431,7 @@ class EarlyStopping:
         if self.verbose:
             print(f'Test loss improved ({self.best_score:.6f} --> {val_loss:.6f}). Saving model ...')
 def train_and_evaluate(args,train_csv,test_csv, device, param_combo, trial_id, logger):
-   
+
     logger.info(f"Trial {trial_id}: {param_combo}")
     try:
         # Adjust max_len
@@ -1522,7 +1522,7 @@ def train_and_evaluate(args,train_csv,test_csv, device, param_combo, trial_id, l
         # Synchronize model parameters
         '''
         state_dict_list = [None]
-       
+
         if rank == 0:
             logger.info(f"Rank {rank}: Broadcasting model state for trial {trial_id}")
             state_dict_list[0] = model.state_dict()
@@ -1553,7 +1553,7 @@ def train_and_evaluate(args,train_csv,test_csv, device, param_combo, trial_id, l
                 total_loss += loss
                 num_batches += 1
             avg_loss = total_loss / num_batches
-           
+
             lr_scheduler.step()
             for param_group in optimizer.param_groups:
                 if param_group['lr'] < 0.000005:
@@ -1563,14 +1563,14 @@ def train_and_evaluate(args,train_csv,test_csv, device, param_combo, trial_id, l
             print(f'Epoch {epoch+1}/{args.epochs} | '
                   f'Spearman: {spearman_corr:.4f} | '
                   f'Pearson: {pearson_corr:.4f} | R2: {r2:.4f} | RMSE: {rmse:.4f} | MAE: {mae:.4f}')
-            early_stopping(-spearman_corr, model) # 改为model
+            early_stopping(-spearman_corr, model) # Use model.
             if early_stopping.early_stop:
                 logger.info(f"Trial {trial_id}: Early stopping triggered")
                 break
             if spearman_corr > best_spearman:
                 best_spearman = spearman_corr
                 checkpoint_path = os.path.join(args.output_dir, f'trial_{trial_id}_epoch_{epoch+1}_spearman_{spearman_corr:.4f}.pth')
-                torch.save(model.state_dict(), checkpoint_path) # 改为model.state_dict()
+                torch.save(model.state_dict(), checkpoint_path) # Use model..state_dict()
                 logger.info(f'Trial {trial_id}: Saved checkpoint: {checkpoint_path}')
         return best_spearman, spearman_corr, test_loss
     except Exception as e:
@@ -1616,20 +1616,20 @@ feature_cols = [
 ]
 def compute_utr_mfe(dna_sequence, temperature=37.0):
     """
-    计算 UTR DNA 序列的 RNA MFE 使用 ViennaRNA。
+    Compute RNA MFE for a UTR DNA sequence with ViennaRNA.
     """
-    # 转换为 RNA 序列 (T -> U)，并清洗
+    # Convert to RNA sequence (T -> U) and clean invalid characters.
     rna_sequence = re.sub(r'[^AUGC]', '', dna_sequence.upper()).replace('T', 'U')
-   
+
     if len(rna_sequence) < 1:
-        raise ValueError("序列不能为空")
-   
-    # 创建折叠化合物
+        raise ValueError("Sequence cannot be empty.")
+
+    # Create the folding compound.
     fc = RNA.fold_compound(rna_sequence)
-   
-    # 计算 MFE 和结构
+
+    # Compute MFE and secondary structure.
     (structure, mfe) = fc.mfe()
-   
+
     return mfe
 def predict_degradation_and_compute_mfe(model, sequence, device, max_len=256):
     model.eval()
@@ -1641,17 +1641,17 @@ def predict_degradation_and_compute_mfe(model, sequence, device, max_len=256):
         input_tensor = input_tensor.to(device)
         nuc_input_tensor = nuc_input_tensor.to(device)
         feat_tensor = feat_tensor.to(device)
-       
+
         # Forward pass
         value_preds, _, _, _, _, _, _, _ = model(
             input_tensor, nuc_input_tensor, feat_tensor, noise_std=0.0, max_len=max_len
         )
-       
+
         degradation_rate = value_preds.squeeze().item() # Predicted degradation rate
-       
+
         # Compute MFE
         mfe = compute_utr_mfe(sequence)
-       
+
         # Compute other features
         feat_dict = compute_features(sequence)
         uaug = feat_dict.get('uAUG', 0)
@@ -1660,7 +1660,7 @@ def predict_degradation_and_compute_mfe(model, sequence, device, max_len=256):
         length = len(sequence)
         cgratio = feat_dict.get('CGratio', 0)
         atratio = feat_dict.get('ATratio', 0)
-       
+
         return {
             'sequence': sequence,
             'degradation_rate': degradation_rate,
@@ -1674,63 +1674,63 @@ def predict_degradation_and_compute_mfe(model, sequence, device, max_len=256):
         }
 def score_sequence(data, max_degradation=10.0, mfe_offset=100, length_range=(200, 1000)):
     """
-    为 3' UTR 序列计算综合评分，基于降解速率、MFE、TC含量和其他特征。
-   
-    参数:
-        data (dict): 包含序列信息的字典
-        max_degradation (float): 假设的最大降解速率，默认 10.0
-        mfe_offset (float): MFE 归一化的偏移量，默认 100
-        length_range (tuple): 适宜长度范围，默认 (200, 1000)
-   
-    返回:
-        float: 综合评分（更高TC含量获得更高分数）
+    Compute the composite score for 3' UTR candidates from degradation rate, MFE, TC content and sequence features.
+
+    Args:
+        data (dict): Dictionary containing sequence information.
+        max_degradation (float): Assumed maximum degradation rate; default is 10.0.
+        mfe_offset (float): Offset used for MFE normalization; default is 100.
+        length_range (tuple): Preferred length range; default is (200, 1000).
+
+    Returns:
+        float: Composite score with higher TC content rewarded.
     """
-    # 降解分数：降解速率越低越好
+    # Degradation score; lower degradation is better.
     degradation_score = 1 - (data['degradation_rate'] / max_degradation)
-   
-    # MFE分数：MFE越低（更负）越好
+
+    # MFE score; lower and more negative MFE is better.
     mfe_score = (data['mfe'] + mfe_offset) / mfe_offset if data['mfe'] != float('inf') else 0
-   
-    # TC含量奖励：TC含量越高奖励越大（UC含量在RNA中对应TC含量）
-    tc_bonus = data['tcperc'] * 2.0 # 将TC含量乘以权重
-   
-    # 惩罚项
-    penalty = (data['uaug'] + data['uorf']) * 0.1 # uAUG和uORF越多越差
-   
-    # 长度适宜性
+
+    # TC-content reward; TC corresponds to UC content in RNA.
+    tc_bonus = data['tcperc'] * 2.0 # Scale TC content by its weight.
+
+    # Penalty terms.
+    penalty = (data['uaug'] + data['uorf']) * 0.1 # More uAUG and uORF motifs are penalized.
+
+    # Length suitability.
     if length_range[0] <= data['length'] <= length_range[1]:
         length_bonus = 1.0
     else:
         length_bonus = 0.5
-   
-    # GC含量适中奖励（40-60%）
+
+    # Reward moderate GC content (40-60%).
     # if 0.4 <= data['cgperc'] <= 0.6:
     #     gc_bonus = 1.2
     # else:
     #     gc_bonus = 0.8
-    gc_bonus = 1.0 + 6.0 * data['cgperc']   # GC 70% → 5.2 倍加成
+    gc_bonus = 1.0 + 6.0 * data['cgperc']   # GC at 70% gives a 5.2x bonus.
 
-    # AT比例惩罚（偏离1越远越差）
+    # AT-ratio penalty; larger deviation from 1 is worse.
     atratio_penalty = abs(data['atratio'] - 1) * 0.1
-   
-    # CG比例惩罚（偏离1越远越差）
+
+    # CG-ratio penalty; larger deviation from 1 is worse.
     cgratio_penalty = abs(data['cgratio'] - 1) * 0.1
-   
-    # 综合评分：重点增加TC含量的权重
+
+    # Composite score with increased TC-content weight.
     score = (
-        0.4 * degradation_score + # 降解率权重
-        0.2 * mfe_score + # MFE权重
-        0.3 * tc_bonus + # TC含量权重（增加到30%）
-        - penalty - # 惩罚项
-        atratio_penalty - # AT比例惩罚
-        cgratio_penalty # CG比例惩罚
+        0.4 * degradation_score + # Degradation-rate weight.
+        0.2 * mfe_score + # MFE weight.
+        0.3 * tc_bonus + # TC-content weight, increased to 30%.
+        - penalty - # Penalty terms.
+        atratio_penalty -  # Implementation detail.
+        cgratio_penalty  # Implementation detail.
     ) * gc_bonus * length_bonus
-   
+
     return score
 # Function to process input sequence
 def process_input_sequence(dna_seq, max_len=256, codon_table=None, char_to_idx=None, nuc_char_to_idx=None):
     dna_seq = dna_seq.upper().replace('U', 'T')
-   
+
     # Nucleotide processing
     nuc_seq = dna_seq
     if len(nuc_seq) > max_len:
@@ -1743,12 +1743,12 @@ def process_input_sequence(dna_seq, max_len=256, codon_table=None, char_to_idx=N
         nuc_seq = nuc_seq[:target_len * 3]
     elif codon_len < target_len:
         nuc_seq = nuc_seq + 'NNN' * (target_len - codon_len)
-   
+
     nuc_seq_list = nuc_to_idx(nuc_seq, nuc_char_to_idx)
     nuc_seq_with_special = add_special_tokens_nuc(nuc_seq_list, nuc_char_to_idx)
     nuc_seq_with_special = pad_or_truncate_nuc(nuc_seq_with_special, max_len, nuc_char_to_idx)
     nuc_input_tensor = torch.tensor([nuc_seq_with_special], dtype=torch.long)
-   
+
     # Codon processing
     rna_seq = dna_seq
     if len(rna_seq) % 3 != 0:
@@ -1758,14 +1758,14 @@ def process_input_sequence(dna_seq, max_len=256, codon_table=None, char_to_idx=N
     rna_seq_with_special = add_special_tokens(rna_seq_list, char_to_idx)
     rna_seq_with_special = pad_or_truncate(rna_seq_with_special, target_len, char_to_idx)
     input_tensor = torch.tensor([rna_seq_with_special], dtype=torch.long)
-   
+
     # Features
     feat_dict = compute_features(dna_seq)
     features = [feat_dict[col] for col in feature_cols if col in feat_dict]
     while len(features) < 27:
         features.append(0.0)
     feat_tensor = torch.tensor([features[:27]], dtype=torch.float)
-   
+
     return input_tensor, nuc_input_tensor, feat_tensor
 def generate_new_sequence(model, input_tensor, nuc_input_tensor, feat_tensor, device, num_samples=1, temperature=1.0, max_len=256):
     model.eval()
@@ -1774,36 +1774,36 @@ def generate_new_sequence(model, input_tensor, nuc_input_tensor, feat_tensor, de
         nuc_input_tensor = nuc_input_tensor.to(device)
         feat_tensor = feat_tensor.to(device)
         noise_std = 0.0 # No noise for generation
-       
+
         # Encode to get z
         mu, log_var, _ = model.encode(input_tensor, max_len=max_len)
         z = model.reparameterize(mu, log_var)
         z = z.repeat(num_samples, 1)  # Replicate z for batch parallel generation
-       
+
         generated_sequences = []
         # Decode in batch
         tgt = torch.full((num_samples, model.max_len // 3), model.char_to_idx['<SOS>'], dtype=torch.long, device=device)
         nuc_tgt = torch.full((num_samples, model.max_len), model.nuc_char_to_idx['<SOS>'], dtype=torch.long, device=device)
-       
+
         # Embed tgt and decode
         emb = model.decoder_embedding(tgt) * math.sqrt(model.decoder_embedding.embedding_dim)
         emb = model.pos_decoder(emb)
         memory = model.transformer_encoder(emb)
         codon_output = model.transformer_decoder(emb, memory)
         logits = model.fc_out(codon_output)
-       
+
         nuc_emb = model.nuc_decoder_embedding(nuc_tgt) * math.sqrt(model.nuc_decoder_embedding.embedding_dim)
         nuc_emb = model.nuc_pos_decoder(nuc_emb)
         nuc_memory = model.nuc_transformer_encoder(nuc_emb)
         nuc_output = model.nuc_transformer_decoder(nuc_emb, nuc_memory)
         nuc_logits = model.fc_nuc_out(nuc_output)
-       
+
         # Sample from logits (focus on nuc for output)
-        # ==================== 高 GC 偏好采样 ====================
+        # ==================== High-GC-biased sampling. ====================
         temperature = temperature
         logits = nuc_logits / temperature
 
-        gc_bonus = 1.2          # 超参数：越大 GC% 越高（5~8 都很好）
+        gc_bonus = 1.2          # Hyperparameter; larger values increase GC percentage.
         at_penalty = 0.8
 
         logits[:, :, nuc_char_to_idx['G']] += gc_bonus
@@ -1819,7 +1819,7 @@ def generate_new_sequence(model, input_tensor, nuc_input_tensor, feat_tensor, de
             generated_seq = ''.join([nuc_idx_to_char.get(sampled_indices[i, j].item(), 'N') for j in range(sampled_indices.size(1))])
             generated_seq = generated_seq.replace('<PAD>', '').replace('<EOS>', '').replace('<SOS>', '').replace('N', '')
             generated_sequences.append(generated_seq)
-   
+
     return generated_sequences
 def batch_predict_degradation(model, sequences, device, max_len=256, batch_size=32):
     """
@@ -1840,18 +1840,18 @@ def batch_predict_degradation(model, sequences, device, max_len=256, batch_size=
                 batch_inputs.append(input_tensor.squeeze(0))
                 batch_nuc_inputs.append(nuc_input_tensor.squeeze(0))
                 batch_feats.append(feat_tensor.squeeze(0))
-           
+
             input_tensor = torch.stack(batch_inputs).to(device)
             nuc_input_tensor = torch.stack(batch_nuc_inputs).to(device)
             feat_tensor = torch.stack(batch_feats).to(device)
-           
+
             value_preds, _, _, _, _, _, _, _ = model(
                 input_tensor, nuc_input_tensor, feat_tensor, noise_std=0.0, max_len=max_len
             )
-           
+
             degradation_preds = value_preds.squeeze().cpu().numpy()
             all_predictions.extend(degradation_preds if degradation_preds.ndim > 0 else [degradation_preds])
-   
+
     return all_predictions
 def compute_mfe_wrapper(sequence):
     try:
@@ -1865,7 +1865,7 @@ def compute_features_wrapper(sequence):
         'uaug': feat_dict.get('uAUG', 0),
         'uorf': feat_dict.get('uORF', 0),
         'cgperc': feat_dict.get('CGperc', 0),
-        'tcperc': feat_dict.get('TCperc', 0), # 添加TC含量
+        'tcperc': feat_dict.get('TCperc', 0), # Add TC content.
         'length': len(sequence),
         'cgratio': feat_dict.get('CGratio', 0),
         'atratio': feat_dict.get('ATratio', 0)

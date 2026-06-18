@@ -904,7 +904,7 @@ def run_multi_folder_grid_search(data_base_dir="Data", model_base_dir="Model"):
     print("=" * 60)
 
     if not os.path.exists(data_base_dir):
-        print(f"❌ Data root directory not found: {data_base_dir}，Please make sure the path is correct.")
+        print(f"❌ Data root directory not found: {data_base_dir}, Please make sure the path is correct.")
         return
 
     folders = [
@@ -1130,7 +1130,7 @@ def run_multi_folder_grid_search(data_base_dir="Data", model_base_dir="Model"):
             )
 
         print(f"\n✅ Folder {folder} training finished.")
-        print(f"🏆 Final selected length combination: {best_combo}，best R2 score: {best_global_r2:.4f}")
+        print(f"🏆 Final selected length combination: {best_combo}, best R2 score: {best_global_r2:.4f}")
         print(f"💾 Best model saved to: {best_model_path}")
 
     print("\n🎉 All datasets have been processed.")
