@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/mrose-icon.png" alt="mROSE icon" width="180">
+  <img src="docs/assets/mrose-cover.png" alt="mROSE cover image" width="100%">
 </p>
 
 # mROSE
