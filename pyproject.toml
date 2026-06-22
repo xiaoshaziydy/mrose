@@ -12,4 +12,7 @@ license = {text = "MIT"}
 authors = [{name = "mROSE contributors"}]
 
 [tool.setuptools.packages.find]
-include = ["mrose*"]
+include = ["mrose*", "mrose_web*"]
+
+[tool.setuptools.package-data]
+mrose_web = ["static/*"]

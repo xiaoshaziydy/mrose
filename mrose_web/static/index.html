@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>mROSE Web Server</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --navy: #043054;
+        --teal: #007982;
+        --coral: #f6484a;
+        --gold: #da9418;
+        --ink: #172838;
+        --muted: #667481;
+        --line: #dbe3e8;
+        --paper: #fffdfa;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        color: var(--ink);
+        background: var(--paper);
+      }
+      main {
+        width: min(1120px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 32px 0 48px;
+      }
+      .hero {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 32px;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 28px;
+      }
+      h1 {
+        margin: 0;
+        color: var(--navy);
+        font-size: 56px;
+        line-height: 1;
+      }
+      .rule {
+        width: 320px;
+        height: 8px;
+        margin: 20px 0 28px;
+        border-radius: 8px;
+        background: var(--coral);
+      }
+      .subtitle {
+        margin: 0;
+        max-width: 720px;
+        color: var(--muted);
+        font-size: 21px;
+        line-height: 1.45;
+      }
+      .hero img {
+        width: 100%;
+        max-height: 280px;
+        object-fit: contain;
+      }
+      .panel {
+        margin-top: 28px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 22px;
+        background: #fff;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+      label {
+        display: grid;
+        gap: 8px;
+        color: var(--navy);
+        font-weight: 700;
+        font-size: 14px;
+      }
+      input, select, textarea {
+        width: 100%;
+        border: 1px solid #bdcad3;
+        border-radius: 6px;
+        padding: 10px 12px;
+        font: inherit;
+        color: var(--ink);
+        background: #fff;
+      }
+      textarea {
+        min-height: 150px;
+        resize: vertical;
+        font-family: "SFMono-Regular", Consolas, monospace;
+      }
+      .span-2 { grid-column: 1 / -1; }
+      button {
+        border: 0;
+        border-radius: 6px;
+        padding: 11px 18px;
+        color: #fff;
+        background: var(--navy);
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .status {
+        margin-top: 18px;
+        border-left: 4px solid var(--teal);
+        padding: 12px 14px;
+        background: #f4faf9;
+        color: var(--ink);
+        min-height: 48px;
+        white-space: pre-wrap;
+      }
+      .files a {
+        display: inline-block;
+        margin: 8px 10px 0 0;
+        color: var(--teal);
+        font-weight: 700;
+      }
+      @media (max-width: 760px) {
+        .hero, .grid { grid-template-columns: 1fr; }
+        h1 { font-size: 42px; }
+        .rule { width: 240px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div>
+          <h1>mROSE</h1>
+          <div class="rule"></div>
+          <p class="subtitle">Online region-aware mRNA sequence generation for 5′ UTR, CDS and 3′ UTR candidates.</p>
+        </div>
+        <img src="/static/mrose-cover.png" alt="mROSE cover image">
+      </section>
+
+      <section class="panel">
+        <form id="generate-form" class="grid">
+          <label>
+            Region
+            <select name="region">
+              <option value="5utr">5′ UTR</option>
+              <option value="cds">CDS</option>
+              <option value="3utr">3′ UTR</option>
+            </select>
+          </label>
+          <label>
+            Device
+            <input name="device" value="cuda:0">
+          </label>
+          <label>
+            Samples
+            <input name="num_samples" type="number" min="1" max="10000" value="100">
+          </label>
+          <label>
+            Top K
+            <input name="top_k" type="number" min="1" max="100" value="10">
+          </label>
+          <label>
+            Temperature
+            <input name="temperature" type="number" min="0.1" max="5" step="0.1" value="1.0">
+          </label>
+          <label>
+            3′ UTR length matching
+            <select name="match_input_length">
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          </label>
+          <label class="span-2">
+            Input sequence
+            <textarea name="sequence" spellcheck="false">AGGAATAAACTAGTATTCTTCTGGTCCCCACAGACTCAGAGAGAACCCGCCACC</textarea>
+          </label>
+          <div class="span-2">
+            <button type="submit">Submit generation job</button>
+          </div>
+        </form>
+        <div id="status" class="status">Ready.</div>
+        <div id="files" class="files"></div>
+      </section>
+    </main>
+
+    <script>
+      const form = document.querySelector("#generate-form");
+      const statusBox = document.querySelector("#status");
+      const filesBox = document.querySelector("#files");
+      const button = form.querySelector("button");
+
+      async function poll(jobId) {
+        const res = await fetch(`/api/jobs/${jobId}`);
+        const job = await res.json();
+        statusBox.textContent = `Job ${job.job_id}\\nStatus: ${job.status}\\nRegion: ${job.region_label}\\nUpdated: ${job.updated_at}`;
+        filesBox.innerHTML = "";
+        if (job.files && job.files.length) {
+          for (const name of job.files) {
+            const link = document.createElement("a");
+            link.href = `/api/jobs/${jobId}/files/${encodeURIComponent(name)}`;
+            link.textContent = name;
+            filesBox.appendChild(link);
+          }
+        }
+        if (job.status === "queued" || job.status === "running") {
+          setTimeout(() => poll(jobId), 2500);
+        } else {
+          button.disabled = false;
+        }
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        button.disabled = true;
+        filesBox.innerHTML = "";
+        statusBox.textContent = "Submitting job...";
+        const data = Object.fromEntries(new FormData(form).entries());
+        data.num_samples = Number(data.num_samples);
+        data.top_k = Number(data.top_k);
+        data.temperature = Number(data.temperature);
+        data.match_input_length = data.match_input_length === "true";
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(data)
+        });
+        const payload = await res.json();
+        if (!res.ok) {
+          statusBox.textContent = payload.detail || "Request failed.";
+          button.disabled = false;
+          return;
+        }
+        poll(payload.job_id);
+      });
+    </script>
+  </body>
+</html>

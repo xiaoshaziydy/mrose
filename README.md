@@ -149,6 +149,17 @@ python scripts/generate_sequences.py --run cds
 
 See [generation/README.md](generation/README.md) for direct commands for 5′ UTR, CDS and 3′ UTR generation.
 
+## Web server
+
+mROSE includes a lightweight FastAPI web server for online sequence-generation jobs:
+
+```bash
+pip install -r web-requirements.txt
+uvicorn mrose_web.app:app --host 0.0.0.0 --port 8000
+```
+
+The server provides a browser form, job-status API and downloadable CSV/FASTA outputs. See [docs/web_server.md](docs/web_server.md) for deployment with Gunicorn and Nginx.
+
 ## Data and checkpoints
 
 The full mROSE data and model archive is available on Zenodo:

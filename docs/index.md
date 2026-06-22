@@ -31,6 +31,7 @@ The full mROSE data and model archive is available on Zenodo: [10.5281/zenodo.20
 
 installation
 generation
+web_server
 notebooks/mROSE_generation
 experiments
 PROJECT_STRUCTURE
