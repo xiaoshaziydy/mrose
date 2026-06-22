@@ -3,239 +3,1308 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>mROSE Web Server</title>
+    <title>mROSE Sequence Workbench</title>
+    <link rel="icon" href="data:,">
     <style>
       :root {
         color-scheme: light;
-        --navy: #043054;
-        --teal: #007982;
-        --coral: #f6484a;
-        --gold: #da9418;
-        --ink: #172838;
-        --muted: #667481;
-        --line: #dbe3e8;
-        --paper: #fffdfa;
+        --lab: #f6f8f5;
+        --ink: #14324a;
+        --agar: #4c9a6a;
+        --gel: #2aa7b8;
+        --amber: #d58a1f;
+        --rose: #c94f7c;
+        --paper: #ffffff;
+        --line: #dce6df;
+        --muted: #607083;
+        --soft: #edf3ef;
+        --shadow: 0 20px 60px rgba(20, 50, 74, 0.1);
+        --display: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+        --body: "Source Sans 3", "Inter", "Segoe UI", system-ui, sans-serif;
+        --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
       }
-      * { box-sizing: border-box; }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        min-width: 320px;
+      }
+
       body {
         margin: 0;
-        font-family: Arial, Helvetica, sans-serif;
         color: var(--ink);
-        background: var(--paper);
+        background:
+          linear-gradient(90deg, rgba(20, 50, 74, 0.045) 1px, transparent 1px) 0 0 / 44px 44px,
+          linear-gradient(0deg, rgba(20, 50, 74, 0.035) 1px, transparent 1px) 0 0 / 44px 44px,
+          var(--lab);
+        font-family: var(--body);
       }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      button,
+      input,
+      textarea,
+      select {
+        border-radius: 8px;
+      }
+
+      button:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible,
+      select:focus-visible {
+        outline: 3px solid rgba(42, 167, 184, 0.35);
+        outline-offset: 2px;
+      }
+
       main {
-        width: min(1120px, calc(100vw - 32px));
+        width: min(1440px, calc(100vw - 28px));
         margin: 0 auto;
-        padding: 32px 0 48px;
+        padding: 18px 0 40px;
       }
-      .hero {
-        display: grid;
-        grid-template-columns: 1.15fr 0.85fr;
-        gap: 32px;
+
+      .topbar {
+        display: flex;
         align-items: center;
-        border-bottom: 1px solid var(--line);
-        padding-bottom: 28px;
+        justify-content: space-between;
+        gap: 16px;
+        min-height: 58px;
+        border-bottom: 1px solid rgba(20, 50, 74, 0.16);
       }
-      h1 {
+
+      .brand {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .brand h1 {
         margin: 0;
-        color: var(--navy);
-        font-size: 56px;
+        font-family: var(--display);
+        font-size: clamp(2.2rem, 5vw, 5.1rem);
+        line-height: 0.85;
+        letter-spacing: 0;
+      }
+
+      .brand span {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        text-transform: uppercase;
+      }
+
+      .health-strip {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        font-family: var(--mono);
+        font-size: 0.78rem;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 28px;
+        border: 1px solid var(--line);
+        padding: 4px 9px;
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--ink);
+        white-space: nowrap;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+
+      .dot.ok {
+        background: var(--agar);
+      }
+
+      .dot.warn {
+        background: var(--amber);
+      }
+
+      .dot.bad {
+        background: var(--rose);
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+        gap: 18px;
+        padding-top: 18px;
+      }
+
+      .sequence-panel,
+      .control-panel,
+      .job-panel {
+        border: 1px solid rgba(20, 50, 74, 0.15);
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: var(--shadow);
+      }
+
+      .sequence-panel {
+        min-height: 660px;
+        display: grid;
+        grid-template-rows: auto auto 1fr auto;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        border-bottom: 1px solid var(--line);
+        padding: 20px;
+      }
+
+      .panel-title {
+        margin: 0;
+        font-family: var(--display);
+        font-size: clamp(1.5rem, 3vw, 2.45rem);
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .panel-kicker {
+        margin: 7px 0 0;
+        color: var(--muted);
+        font-size: 0.96rem;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        border-bottom: 1px solid var(--line);
+      }
+
+      .metric {
+        min-width: 0;
+        padding: 16px 18px;
+        border-right: 1px solid var(--line);
+      }
+
+      .metric:last-child {
+        border-right: 0;
+      }
+
+      .metric b {
+        display: block;
+        font-family: var(--mono);
+        font-size: clamp(1.4rem, 3vw, 2.25rem);
         line-height: 1;
       }
-      .rule {
-        width: 320px;
-        height: 8px;
-        margin: 20px 0 28px;
-        border-radius: 8px;
-        background: var(--coral);
-      }
-      .subtitle {
-        margin: 0;
-        max-width: 720px;
+
+      .metric span {
+        display: block;
+        margin-top: 7px;
         color: var(--muted);
-        font-size: 21px;
-        line-height: 1.45;
+        font-size: 0.78rem;
+        text-transform: uppercase;
       }
-      .hero img {
-        width: 100%;
-        max-height: 280px;
-        object-fit: contain;
-      }
-      .panel {
-        margin-top: 28px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 22px;
-        background: #fff;
-      }
-      .grid {
+
+      .lane-wrap {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 18px;
+        grid-template-rows: auto 1fr;
+        gap: 14px;
+        min-height: 0;
+        padding: 18px 20px 20px;
       }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+      }
+
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+      }
+
+      .lane {
+        min-height: 320px;
+        max-height: 460px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        background:
+          linear-gradient(90deg, rgba(42, 167, 184, 0.11) 1px, transparent 1px) 0 0 / 20px 20px,
+          #fbfdfb;
+        padding: 16px;
+      }
+
+      .base-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(24px, 1fr));
+        gap: 7px;
+      }
+
+      .base {
+        display: grid;
+        place-items: center;
+        aspect-ratio: 1;
+        border: 1px solid rgba(20, 50, 74, 0.14);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 0.82rem;
+        font-weight: 800;
+        background: var(--soft);
+      }
+
+      .base-a {
+        background: rgba(76, 154, 106, 0.2);
+        border-color: rgba(76, 154, 106, 0.35);
+      }
+
+      .base-c {
+        background: rgba(42, 167, 184, 0.18);
+        border-color: rgba(42, 167, 184, 0.35);
+      }
+
+      .base-g {
+        background: rgba(213, 138, 31, 0.19);
+        border-color: rgba(213, 138, 31, 0.35);
+      }
+
+      .base-t,
+      .base-u {
+        background: rgba(201, 79, 124, 0.17);
+        border-color: rgba(201, 79, 124, 0.34);
+      }
+
+      .base-invalid {
+        color: #fff;
+        background: var(--rose);
+        border-color: var(--rose);
+      }
+
+      .sequence-note {
+        min-height: 24px;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.8rem;
+      }
+
+      .sequence-input {
+        border-top: 1px solid var(--line);
+        padding: 18px 20px 20px;
+      }
+
+      .full-sequence-inputs {
+        display: none;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .full-sequence-inputs.show {
+        display: grid;
+      }
+
+      .full-sequence-inputs textarea {
+        min-height: 118px;
+      }
+
       label {
         display: grid;
         gap: 8px;
-        color: var(--navy);
-        font-weight: 700;
-        font-size: 14px;
+        color: var(--ink);
+        font-weight: 800;
+        font-size: 0.82rem;
+        text-transform: uppercase;
       }
-      input, select, textarea {
+
+      textarea,
+      input,
+      select {
         width: 100%;
-        border: 1px solid #bdcad3;
-        border-radius: 6px;
-        padding: 10px 12px;
-        font: inherit;
+        border: 1px solid #b8c8bf;
+        padding: 11px 12px;
         color: var(--ink);
         background: #fff;
       }
+
       textarea {
-        min-height: 150px;
+        min-height: 144px;
         resize: vertical;
-        font-family: "SFMono-Regular", Consolas, monospace;
+        font-family: var(--mono);
+        line-height: 1.55;
+        text-transform: uppercase;
       }
-      .span-2 { grid-column: 1 / -1; }
-      button {
-        border: 0;
-        border-radius: 6px;
-        padding: 11px 18px;
+
+      .control-panel {
+        min-height: 660px;
+        padding: 20px;
+      }
+
+      form {
+        display: grid;
+        gap: 18px;
+      }
+
+      .region-tabs {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .region-tabs input {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        opacity: 0;
+      }
+
+      .region-tabs label {
+        display: grid;
+        place-items: center;
+        min-height: 44px;
+        border: 1px solid #b8c8bf;
+        background: #fff;
+        color: var(--ink);
+        cursor: pointer;
+        text-align: center;
+        text-transform: none;
+      }
+
+      .region-tabs input:checked + label {
+        border-color: var(--ink);
         color: #fff;
-        background: var(--navy);
-        font-weight: 700;
+        background: var(--ink);
+      }
+
+      .region-tabs input:focus-visible + label {
+        outline: 3px solid rgba(42, 167, 184, 0.35);
+        outline-offset: 2px;
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .slider-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 12px;
+      }
+
+      input[type="range"] {
+        padding: 0;
+        accent-color: var(--gel);
+      }
+
+      .value-chip {
+        min-width: 56px;
+        border: 1px solid var(--line);
+        padding: 8px 10px;
+        background: var(--soft);
+        font-family: var(--mono);
+        text-align: center;
+      }
+
+      .submit-row {
+        display: grid;
+        gap: 10px;
+      }
+
+      .submit {
+        min-height: 52px;
+        border: 0;
+        color: #fff;
+        background: var(--ink);
+        font-family: var(--display);
+        font-size: 1.02rem;
+        font-weight: 800;
         cursor: pointer;
       }
-      button:disabled {
-        opacity: 0.55;
+
+      .submit:hover {
+        background: #0c263a;
+      }
+
+      .submit:disabled {
         cursor: not-allowed;
+        opacity: 0.55;
       }
-      .status {
+
+      .inline-error {
+        min-height: 22px;
+        color: var(--rose);
+        font-size: 0.9rem;
+        font-weight: 800;
+      }
+
+      .job-panel {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+        min-height: 232px;
+      }
+
+      .timeline,
+      .job-detail {
+        padding: 20px;
+      }
+
+      .timeline {
+        border-right: 1px solid var(--line);
+      }
+
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
         margin-top: 18px;
-        border-left: 4px solid var(--teal);
-        padding: 12px 14px;
-        background: #f4faf9;
-        color: var(--ink);
-        min-height: 48px;
-        white-space: pre-wrap;
       }
+
+      .step {
+        min-height: 78px;
+        border: 1px solid var(--line);
+        padding: 11px;
+        background: #fff;
+      }
+
+      .step b {
+        display: block;
+        font-family: var(--mono);
+        font-size: 0.82rem;
+        text-transform: uppercase;
+      }
+
+      .step span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .step.active {
+        border-color: var(--gel);
+        box-shadow: inset 0 0 0 2px rgba(42, 167, 184, 0.18);
+      }
+
+      .step.done {
+        border-color: rgba(76, 154, 106, 0.55);
+        background: rgba(76, 154, 106, 0.09);
+      }
+
+      .step.failed {
+        border-color: rgba(201, 79, 124, 0.55);
+        background: rgba(201, 79, 124, 0.1);
+      }
+
+      .job-readout {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .readout {
+        min-width: 0;
+        border: 1px solid var(--line);
+        padding: 10px;
+        background: #fff;
+      }
+
+      .readout span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.74rem;
+        text-transform: uppercase;
+      }
+
+      .readout b {
+        display: block;
+        overflow-wrap: anywhere;
+        margin-top: 6px;
+        font-family: var(--mono);
+        font-size: 0.82rem;
+      }
+
+      .files {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
       .files a {
-        display: inline-block;
-        margin: 8px 10px 0 0;
-        color: var(--teal);
-        font-weight: 700;
+        border: 1px solid rgba(42, 167, 184, 0.38);
+        padding: 8px 10px;
+        color: var(--ink);
+        background: rgba(42, 167, 184, 0.1);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        font-weight: 800;
+        text-decoration: none;
       }
-      @media (max-width: 760px) {
-        .hero, .grid { grid-template-columns: 1fr; }
-        h1 { font-size: 42px; }
-        .rule { width: 240px; }
+
+      .csv-preview {
+        display: none;
+        margin-top: 14px;
+        border: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .csv-preview.show {
+        display: block;
+      }
+
+      .csv-preview-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid var(--line);
+        padding: 10px;
+      }
+
+      .csv-preview-head b {
+        font-family: var(--mono);
+        font-size: 0.82rem;
+      }
+
+      .csv-table-wrap {
+        max-height: 360px;
+        overflow: auto;
+      }
+
+      .csv-table {
+        width: 100%;
+        min-width: 920px;
+        border-collapse: collapse;
+        font-family: var(--mono);
+        font-size: 0.76rem;
+      }
+
+      .csv-table th,
+      .csv-table td {
+        max-width: 360px;
+        border-bottom: 1px solid var(--line);
+        border-right: 1px solid var(--line);
+        padding: 8px 9px;
+        text-align: left;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+
+      .csv-table th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: var(--soft);
+        color: var(--ink);
+        text-transform: uppercase;
+      }
+
+      .error-box {
+        display: none;
+        margin-top: 14px;
+        border-left: 4px solid var(--rose);
+        padding: 10px 12px;
+        color: #6f1738;
+        background: rgba(201, 79, 124, 0.1);
+        font-size: 0.92rem;
+      }
+
+      .error-box.show {
+        display: block;
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .submit,
+        .step,
+        .files a,
+        .region-tabs label {
+          transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+        }
+
+        .submit:hover,
+        .files a:hover {
+          transform: translateY(-1px);
+        }
+      }
+
+      @media (max-width: 980px) {
+        main {
+          width: min(100% - 20px, 760px);
+        }
+
+        .topbar,
+        .workspace,
+        .job-panel,
+        .two-col {
+          grid-template-columns: 1fr;
+        }
+
+        .topbar {
+          display: grid;
+          justify-items: stretch;
+          padding-bottom: 12px;
+        }
+
+        .health-strip {
+          justify-content: flex-start;
+        }
+
+        .workspace {
+          display: grid;
+        }
+
+        .control-panel,
+        .sequence-panel {
+          min-height: auto;
+        }
+
+        .timeline {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+      }
+
+      @media (max-width: 640px) {
+        main {
+          width: min(100% - 14px, 520px);
+          padding-top: 10px;
+        }
+
+        .brand {
+          display: grid;
+          gap: 4px;
+        }
+
+        .panel-head,
+        .metrics,
+        .steps,
+        .job-readout,
+        .region-tabs,
+        .full-sequence-inputs {
+          grid-template-columns: 1fr;
+        }
+
+        .panel-head {
+          display: grid;
+        }
+
+        .metric {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .metric:last-child {
+          border-bottom: 0;
+        }
+
+        .lane {
+          min-height: 260px;
+        }
+
+        .base-grid {
+          grid-template-columns: repeat(auto-fill, minmax(22px, 1fr));
+        }
       }
     </style>
   </head>
   <body>
     <main>
-      <section class="hero">
-        <div>
+      <header class="topbar">
+        <div class="brand">
           <h1>mROSE</h1>
-          <div class="rule"></div>
-          <p class="subtitle">Online region-aware mRNA sequence generation for 5′ UTR, CDS and 3′ UTR candidates.</p>
+          <span>region-aware mRNA generation</span>
         </div>
-        <img src="/static/mrose-cover.png" alt="mROSE cover image">
-      </section>
+        <div class="health-strip" id="health-strip">
+          <span class="pill"><span class="dot warn"></span>checking service</span>
+        </div>
+      </header>
 
-      <section class="panel">
-        <form id="generate-form" class="grid">
-          <label>
-            Region
-            <select name="region">
-              <option value="5utr">5′ UTR</option>
-              <option value="cds">CDS</option>
-              <option value="3utr">3′ UTR</option>
-            </select>
-          </label>
-          <label>
-            Device
-            <input name="device" value="cuda:0">
-          </label>
-          <label>
-            Samples
-            <input name="num_samples" type="number" min="1" max="10000" value="100">
-          </label>
-          <label>
-            Top K
-            <input name="top_k" type="number" min="1" max="100" value="10">
-          </label>
-          <label>
-            Temperature
-            <input name="temperature" type="number" min="0.1" max="5" step="0.1" value="1.0">
-          </label>
-          <label>
-            3′ UTR length matching
-            <select name="match_input_length">
-              <option value="true">Enabled</option>
-              <option value="false">Disabled</option>
-            </select>
-          </label>
-          <label class="span-2">
-            Input sequence
-            <textarea name="sequence" spellcheck="false">AGGAATAAACTAGTATTCTTCTGGTCCCCACAGACTCAGAGAGAACCCGCCACC</textarea>
-          </label>
-          <div class="span-2">
-            <button type="submit">Submit generation job</button>
+      <div class="workspace">
+        <section class="sequence-panel" aria-labelledby="sequence-title">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title" id="sequence-title">Sequence lane</h2>
+              <p class="panel-kicker">DNA-normalized readout</p>
+            </div>
+            <span class="pill" id="region-chip"><span class="dot ok"></span>5' UTR</span>
           </div>
-        </form>
-        <div id="status" class="status">Ready.</div>
-        <div id="files" class="files"></div>
-      </section>
+
+          <div class="metrics" aria-label="Sequence metrics">
+            <div class="metric">
+              <b id="length-metric">0</b>
+              <span>length nt</span>
+            </div>
+            <div class="metric">
+              <b id="gc-metric">0%</b>
+              <span>GC content</span>
+            </div>
+            <div class="metric">
+              <b id="invalid-metric">0</b>
+              <span>invalid bases</span>
+            </div>
+            <div class="metric">
+              <b id="u-metric">0</b>
+              <span>U converted</span>
+            </div>
+          </div>
+
+          <div class="lane-wrap">
+            <div class="legend" aria-label="Base colors">
+              <span><i class="swatch base-a"></i>A</span>
+              <span><i class="swatch base-c"></i>C</span>
+              <span><i class="swatch base-g"></i>G</span>
+              <span><i class="swatch base-t"></i>T/U</span>
+              <span><i class="swatch base-invalid"></i>invalid</span>
+            </div>
+            <div class="lane" aria-live="polite">
+              <div class="base-grid" id="base-grid"></div>
+            </div>
+            <div class="sequence-note" id="sequence-note"></div>
+          </div>
+
+          <div class="sequence-input">
+            <div id="single-sequence-input">
+              <label for="sequence">Input sequence</label>
+              <textarea id="sequence" name="sequence" spellcheck="false">AGGAATAAACTAGTATTCTTCTGGTCCCCACAGACTCAGAGAGAACCCGCCACC</textarea>
+            </div>
+            <div class="full-sequence-inputs" id="full-sequence-inputs">
+              <label for="sequence_5utr">
+                5' UTR template
+                <textarea id="sequence_5utr" name="sequence_5utr" spellcheck="false">AGGAATAAACTAGTATTCTTCTGGTCCCCACAGACTCAGAGAGAACCCGCCACC</textarea>
+              </label>
+              <label for="sequence_cds">
+                CDS template
+                <textarea id="sequence_cds" name="sequence_cds" spellcheck="false">ATGGCCGAGGAGCTGTTCACCGGGGTGGTGCCCATCCTGGTCGAGCTGGACGGCGACGTAAACGGCCACAAGTTCAGCGTGTCCGGCGAGGGCGAGGGCGATGCCACCTACGGCAAGCTGACCCTGAAGTTCATCTGCACCACCGGCAAGCTGCCCGTGCCCTGGCCCACCCTCGTGACCACCCTGACCTACGGCGTGCAGTGCTTCAGCCGCTACCCCGACCACATGAAGCAGCACGACTTCTTCAAGTCCGCCATGCCCGAGGGCTACGTCCAGGAGCGCACCATCTTCTTCAAGGACGACGGCAACTACAAGACCCGCGCCGAGGTGAAGTTCGAGGGCGACACCCTGGTGAACCGCATCGAGCTGAAGGGCATCGACTTCAAGGAGGACGGCAACATCCTGGGGCACAAGCTGGAGTACAACTACAACAGCCACAACGTCTATATCATGGCCGACAAGCAGAAGAACGGCATCAAGGTGAACTTCAAGATCCGCCACAACATCGAGGACGGCAGCGTGCAGCTCGCCGACCACTACCAGCAGAACACCCCCATCGGCGACGGCCCCGTGCTGCTGCCCGACAACCACTACCTGAGCACCCAGTCCGCCCTGAGCAAAGACCCCAACGAGAAGCGCGATCACATGGTCCTGCTGGAGTTCGTGACCGCCGCCGGGATCACTCTCGGCATGGACGAGCTGTACAAGTAA</textarea>
+              </label>
+              <label for="sequence_3utr">
+                3' UTR template
+                <textarea id="sequence_3utr" name="sequence_3utr" spellcheck="false">CTGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGGAGGTGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAAAAAAAAAAAAAAAAA</textarea>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <aside class="control-panel" aria-labelledby="controls-title">
+          <div class="panel-head" style="padding: 0 0 18px; border-bottom: 0;">
+            <div>
+              <h2 class="panel-title" id="controls-title">Generation run</h2>
+              <p class="panel-kicker">Candidate set controls</p>
+            </div>
+          </div>
+
+          <form id="generate-form">
+            <div>
+              <label>Region</label>
+              <div class="region-tabs" role="radiogroup" aria-label="Region">
+                <input id="region-5utr" type="radio" name="region" value="5utr" checked>
+                <label for="region-5utr">5' UTR</label>
+                <input id="region-cds" type="radio" name="region" value="cds">
+                <label for="region-cds">CDS</label>
+                <input id="region-3utr" type="radio" name="region" value="3utr">
+                <label for="region-3utr">3' UTR</label>
+                <input id="region-full" type="radio" name="region" value="full">
+                <label for="region-full">Full mRNA</label>
+              </div>
+            </div>
+
+            <div class="two-col">
+              <label for="num_samples">
+                Samples
+                <input id="num_samples" name="num_samples" type="number" min="1" max="10000" value="100">
+              </label>
+              <label for="top_k">
+                Top K
+                <input id="top_k" name="top_k" type="number" min="1" max="100" value="10">
+              </label>
+            </div>
+
+            <label for="temperature">
+              Temperature
+              <div class="slider-row">
+                <input id="temperature" name="temperature" type="range" min="0.1" max="5" step="0.1" value="1">
+                <span class="value-chip" id="temperature-value">1.0</span>
+              </div>
+            </label>
+
+            <div class="submit-row">
+              <button class="submit" id="submit-button" type="submit">Run generation</button>
+              <div class="inline-error" id="form-error" role="alert"></div>
+            </div>
+          </form>
+        </aside>
+
+        <section class="job-panel" aria-labelledby="job-title">
+          <div class="timeline">
+            <h2 class="panel-title" id="job-title">Job timeline</h2>
+            <div class="steps" id="steps">
+              <div class="step" data-step="queued"><b>queued</b><span>Waiting for worker</span></div>
+              <div class="step" data-step="running"><b>running</b><span>Generating candidates</span></div>
+              <div class="step" data-step="succeeded"><b>succeeded</b><span>Files are ready</span></div>
+              <div class="step" data-step="failed"><b>failed</b><span>Review logs</span></div>
+            </div>
+          </div>
+
+          <div class="job-detail">
+            <div class="job-readout">
+              <div class="readout">
+                <span>job id</span>
+                <b id="job-id">not submitted</b>
+              </div>
+              <div class="readout">
+                <span>status</span>
+                <b id="job-status">idle</b>
+              </div>
+              <div class="readout">
+                <span>region</span>
+                <b id="job-region">-</b>
+              </div>
+              <div class="readout">
+                <span>updated</span>
+                <b id="job-updated">-</b>
+              </div>
+            </div>
+            <div class="files" id="files"></div>
+            <div class="csv-preview" id="csv-preview">
+              <div class="csv-preview-head">
+                <b id="csv-title">mrose_5utr_top10.csv</b>
+              </div>
+              <div class="csv-table-wrap" id="csv-table-wrap"></div>
+            </div>
+            <div class="error-box" id="error-box"></div>
+          </div>
+        </section>
+      </div>
     </main>
 
     <script>
       const form = document.querySelector("#generate-form");
-      const statusBox = document.querySelector("#status");
+      const sequenceInput = document.querySelector("#sequence");
+      const singleSequenceInput = document.querySelector("#single-sequence-input");
+      const fullSequenceInputs = document.querySelector("#full-sequence-inputs");
+      const sequence5utrInput = document.querySelector("#sequence_5utr");
+      const sequenceCdsInput = document.querySelector("#sequence_cds");
+      const sequence3utrInput = document.querySelector("#sequence_3utr");
+      const baseGrid = document.querySelector("#base-grid");
+      const sequenceNote = document.querySelector("#sequence-note");
+      const lengthMetric = document.querySelector("#length-metric");
+      const gcMetric = document.querySelector("#gc-metric");
+      const invalidMetric = document.querySelector("#invalid-metric");
+      const uMetric = document.querySelector("#u-metric");
+      const healthStrip = document.querySelector("#health-strip");
+      const regionChip = document.querySelector("#region-chip");
+      const temperature = document.querySelector("#temperature");
+      const temperatureValue = document.querySelector("#temperature-value");
+      const samplesInput = document.querySelector("#num_samples");
+      const topKInput = document.querySelector("#top_k");
+      const submitButton = document.querySelector("#submit-button");
+      const formError = document.querySelector("#form-error");
       const filesBox = document.querySelector("#files");
-      const button = form.querySelector("button");
+      const csvPreview = document.querySelector("#csv-preview");
+      const csvTableWrap = document.querySelector("#csv-table-wrap");
+      const errorBox = document.querySelector("#error-box");
+      const jobIdBox = document.querySelector("#job-id");
+      const jobStatusBox = document.querySelector("#job-status");
+      const jobRegionBox = document.querySelector("#job-region");
+      const jobUpdatedBox = document.querySelector("#job-updated");
+      const steps = Array.from(document.querySelectorAll(".step"));
 
-      async function poll(jobId) {
-        const res = await fetch(`/api/jobs/${jobId}`);
-        const job = await res.json();
-        statusBox.textContent = `Job ${job.job_id}\\nStatus: ${job.status}\\nRegion: ${job.region_label}\\nUpdated: ${job.updated_at}`;
-        filesBox.innerHTML = "";
-        if (job.files && job.files.length) {
-          for (const name of job.files) {
-            const link = document.createElement("a");
-            link.href = `/api/jobs/${jobId}/files/${encodeURIComponent(name)}`;
-            link.textContent = name;
-            filesBox.appendChild(link);
+      const labels = {
+        "5utr": "5' UTR",
+        "cds": "CDS",
+        "3utr": "3' UTR",
+        "full": "Full-length mRNA"
+      };
+
+      const stepOrder = ["queued", "running", "succeeded", "failed"];
+      const downloadFileName = "mrose_5utr_top10.csv";
+      let pollTimer = null;
+      let healthPayload = null;
+
+      function selectedRegion() {
+        return new FormData(form).get("region") || "5utr";
+      }
+
+      function normalizeSequence(value) {
+        const compact = value.replace(/\s+/g, "").toUpperCase();
+        const normalized = compact.replace(/U/g, "T");
+        const invalid = compact.match(/[^ACGTU]/g) || [];
+        const uCount = (compact.match(/U/g) || []).length;
+        const gcCount = (normalized.match(/[GC]/g) || []).length;
+        return {
+          compact,
+          normalized,
+          invalidCount: invalid.length,
+          uCount,
+          gc: normalized.length ? Math.round((gcCount / normalized.length) * 100) : 0
+        };
+      }
+
+      function activeSequenceStats() {
+        if (selectedRegion() !== "full") {
+          return normalizeSequence(sequenceInput.value);
+        }
+        const parts = [
+          normalizeSequence(sequence5utrInput.value),
+          normalizeSequence(sequenceCdsInput.value),
+          normalizeSequence(sequence3utrInput.value)
+        ];
+        const compact = parts.map((part) => part.compact).join("");
+        const normalized = parts.map((part) => part.normalized).join("");
+        const invalidCount = parts.reduce((total, part) => total + part.invalidCount, 0);
+        const uCount = parts.reduce((total, part) => total + part.uCount, 0);
+        const gcCount = (normalized.match(/[GC]/g) || []).length;
+        return {
+          compact,
+          normalized,
+          invalidCount,
+          uCount,
+          gc: normalized.length ? Math.round((gcCount / normalized.length) * 100) : 0,
+          parts
+        };
+      }
+
+      function renderSequence() {
+        const stats = activeSequenceStats();
+        const chars = stats.compact.split("");
+        const shown = chars.slice(0, 480);
+        baseGrid.innerHTML = "";
+        for (const char of shown) {
+          const base = document.createElement("span");
+          const key = /^[ACGTU]$/.test(char) ? char.toLowerCase() : "invalid";
+          base.className = `base base-${key}`;
+          base.textContent = char || "-";
+          baseGrid.appendChild(base);
+        }
+        if (chars.length > shown.length) {
+          const more = document.createElement("span");
+          more.className = "base";
+          more.textContent = `+${chars.length - shown.length}`;
+          baseGrid.appendChild(more);
+        }
+        lengthMetric.textContent = String(stats.normalized.length);
+        gcMetric.textContent = `${stats.gc}%`;
+        invalidMetric.textContent = String(stats.invalidCount);
+        uMetric.textContent = String(stats.uCount);
+        sequenceNote.textContent = stats.uCount
+          ? `${stats.uCount} U base${stats.uCount === 1 ? "" : "s"} will be submitted as T.`
+          : "No U bases detected.";
+        return stats;
+      }
+
+      function setHealthPill(text, state = "warn") {
+        return `<span class="pill"><span class="dot ${state}"></span>${text}</span>`;
+      }
+
+      function checkpointReady(value) {
+        if (typeof value === "boolean") return value;
+        if (value && typeof value === "object" && "ready" in value) return Boolean(value.ready);
+        return Boolean(value);
+      }
+
+      function applyHealth(payload) {
+        healthPayload = payload;
+        const checkpoints = payload.checkpoints || {};
+        const pieces = [
+          setHealthPill(payload.ready_for_generation === false ? "service limited" : "service online", payload.ready_for_generation === false ? "warn" : "ok")
+        ];
+        for (const region of ["5utr", "cds", "3utr"]) {
+          const hasValue = Object.prototype.hasOwnProperty.call(checkpoints, region);
+          const ready = hasValue ? checkpointReady(checkpoints[region]) : false;
+          pieces.push(setHealthPill(`${labels[region]} model`, ready ? "ok" : "bad"));
+        }
+        const fullReady = ["5utr", "cds", "3utr"].every((region) => checkpointReady(checkpoints[region]));
+        pieces.push(setHealthPill("Full mRNA", fullReady ? "ok" : "bad"));
+        if (payload.job_dir) {
+          pieces.push(setHealthPill("job store ready", "ok"));
+        }
+        healthStrip.innerHTML = pieces.join("");
+        if (payload.limits) {
+          if (payload.limits.max_samples) samplesInput.max = payload.limits.max_samples;
+          if (payload.limits.max_top_k) topKInput.max = payload.limits.max_top_k;
+        }
+      }
+
+      async function refreshHealth() {
+        try {
+          const response = await fetch("/api/health", {headers: {"Accept": "application/json"}});
+          if (!response.ok) throw new Error("health check failed");
+          applyHealth(await response.json());
+        } catch (error) {
+          healthStrip.innerHTML = setHealthPill("service unreachable", "bad");
+        }
+      }
+
+      function updateRegionView() {
+        const region = selectedRegion();
+        const checkpoints = healthPayload && healthPayload.checkpoints ? healthPayload.checkpoints : {};
+        const ready = region === "full"
+          ? ["5utr", "cds", "3utr"].every((item) => checkpointReady(checkpoints[item]))
+          : Object.prototype.hasOwnProperty.call(checkpoints, region)
+            ? checkpointReady(checkpoints[region])
+            : true;
+        regionChip.innerHTML = `<span class="dot ${ready ? "ok" : "bad"}"></span>${labels[region]}`;
+        singleSequenceInput.style.display = region === "full" ? "none" : "block";
+        fullSequenceInputs.classList.toggle("show", region === "full");
+        renderSequence();
+      }
+
+      function validateForm() {
+        const region = selectedRegion();
+        const stats = renderSequence();
+        const samples = Number(samplesInput.value);
+        const topK = Number(topKInput.value);
+        const maxSamples = Number(samplesInput.max);
+        const maxTopK = Number(topKInput.max);
+        if (!stats.normalized.length) return "Sequence cannot be empty.";
+        if (stats.invalidCount) return "Sequence may contain only A, C, G, T or U.";
+        if (region === "cds" && stats.normalized.length < 3) return "CDS sequence must contain at least one codon.";
+        if (region === "full") {
+          const parts = [
+            ["5' UTR", normalizeSequence(sequence5utrInput.value)],
+            ["CDS", normalizeSequence(sequenceCdsInput.value)],
+            ["3' UTR", normalizeSequence(sequence3utrInput.value)]
+          ];
+          for (const [label, part] of parts) {
+            if (!part.normalized.length) return `${label} template cannot be empty.`;
+            if (part.invalidCount) return `${label} template may contain only A, C, G, T or U.`;
+          }
+          if (parts[1][1].normalized.length < 3) return "CDS template must contain at least one codon.";
+        }
+        if (!Number.isInteger(samples) || samples < 1 || samples > maxSamples) return `Samples must be between 1 and ${maxSamples}.`;
+        if (!Number.isInteger(topK) || topK < 1 || topK > maxTopK) return `Top K must be between 1 and ${maxTopK}.`;
+        if (topK > samples) return "Top K cannot exceed samples.";
+        return "";
+      }
+
+      function setSteps(status) {
+        const activeIndex = stepOrder.indexOf(status);
+        for (const step of steps) {
+          const stepName = step.dataset.step;
+          step.classList.remove("active", "done", "failed");
+          if (status === "failed" && stepName === "failed") {
+            step.classList.add("failed");
+          } else if (stepName === status) {
+            step.classList.add("active");
+          } else if (activeIndex > stepOrder.indexOf(stepName) && status !== "failed") {
+            step.classList.add("done");
           }
         }
-        if (job.status === "queued" || job.status === "running") {
-          setTimeout(() => poll(jobId), 2500);
-        } else {
-          button.disabled = false;
+      }
+
+      function parseCsv(text) {
+        const rows = [];
+        let row = [];
+        let field = "";
+        let inQuotes = false;
+        for (let index = 0; index < text.length; index += 1) {
+          const char = text[index];
+          const next = text[index + 1];
+          if (char === '"' && inQuotes && next === '"') {
+            field += '"';
+            index += 1;
+          } else if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === "," && !inQuotes) {
+            row.push(field);
+            field = "";
+          } else if ((char === "\n" || char === "\r") && !inQuotes) {
+            if (char === "\r" && next === "\n") index += 1;
+            row.push(field);
+            if (row.some((value) => value !== "")) rows.push(row);
+            row = [];
+            field = "";
+          } else {
+            field += char;
+          }
         }
+        if (field || row.length) {
+          row.push(field);
+          if (row.some((value) => value !== "")) rows.push(row);
+        }
+        return rows;
+      }
+
+      function renderCsvTable(rows) {
+        csvTableWrap.innerHTML = "";
+        if (rows.length < 2) {
+          csvPreview.classList.remove("show");
+          return;
+        }
+        const table = document.createElement("table");
+        table.className = "csv-table";
+        const thead = document.createElement("thead");
+        const headRow = document.createElement("tr");
+        for (const heading of rows[0]) {
+          const th = document.createElement("th");
+          th.textContent = heading;
+          headRow.appendChild(th);
+        }
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        for (const row of rows.slice(1)) {
+          const tr = document.createElement("tr");
+          for (let index = 0; index < rows[0].length; index += 1) {
+            const td = document.createElement("td");
+            td.textContent = row[index] || "";
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        csvTableWrap.appendChild(table);
+        csvPreview.classList.add("show");
+      }
+
+      async function loadCsvPreview(jobId) {
+        const response = await fetch(`/api/jobs/${jobId}/files/${downloadFileName}`);
+        if (!response.ok) throw new Error("CSV preview unavailable.");
+        renderCsvTable(parseCsv(await response.text()));
+      }
+
+      function renderJob(job) {
+        jobIdBox.textContent = job.job_id || "not submitted";
+        jobStatusBox.textContent = job.status || "idle";
+        jobRegionBox.textContent = job.region_label || labels[job.region] || "-";
+        jobUpdatedBox.textContent = job.updated_at ? new Date(job.updated_at).toLocaleString() : "-";
+        filesBox.innerHTML = "";
+        csvPreview.classList.remove("show");
+        csvTableWrap.innerHTML = "";
+        errorBox.classList.remove("show");
+        errorBox.textContent = "";
+        if (job.files && job.files.includes(downloadFileName)) {
+          const link = document.createElement("a");
+          link.href = `/api/jobs/${job.job_id}/files/${encodeURIComponent(downloadFileName)}`;
+          link.textContent = downloadFileName;
+          filesBox.appendChild(link);
+          if (job.status === "succeeded") {
+            loadCsvPreview(job.job_id).catch(() => {
+              csvPreview.classList.remove("show");
+            });
+          }
+        }
+        if (job.error) {
+          errorBox.textContent = job.error;
+          errorBox.classList.add("show");
+        }
+        setSteps(job.status);
+      }
+
+      async function poll(jobId) {
+        try {
+          const response = await fetch(`/api/jobs/${jobId}`, {headers: {"Accept": "application/json"}});
+          const job = await response.json();
+          if (!response.ok) throw new Error(job.detail || "Job status request failed.");
+          renderJob(job);
+          if (job.status === "queued" || job.status === "running") {
+            pollTimer = setTimeout(() => poll(jobId), 2500);
+          } else {
+            submitButton.disabled = false;
+            refreshHealth();
+          }
+        } catch (error) {
+          submitButton.disabled = false;
+          formError.textContent = error.message;
+        }
+      }
+
+      form.addEventListener("input", () => {
+        temperatureValue.textContent = Number(temperature.value).toFixed(1);
+        formError.textContent = validateForm();
+        updateRegionView();
+      });
+
+      for (const input of [sequenceInput, sequence5utrInput, sequenceCdsInput, sequence3utrInput]) {
+        input.addEventListener("input", () => {
+          formError.textContent = validateForm();
+        });
+      }
+
+      for (const input of form.querySelectorAll('input[name="region"]')) {
+        input.addEventListener("change", () => {
+          updateRegionView();
+          formError.textContent = validateForm();
+        });
       }
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
-        button.disabled = true;
-        filesBox.innerHTML = "";
-        statusBox.textContent = "Submitting job...";
+        formError.textContent = validateForm();
+        if (formError.textContent) return;
+        if (pollTimer) clearTimeout(pollTimer);
+
         const data = Object.fromEntries(new FormData(form).entries());
+        if (selectedRegion() === "full") {
+          data.sequence_5utr = normalizeSequence(sequence5utrInput.value).normalized;
+          data.sequence_cds = normalizeSequence(sequenceCdsInput.value).normalized;
+          data.sequence_3utr = normalizeSequence(sequence3utrInput.value).normalized;
+          data.sequence = data.sequence_5utr + data.sequence_cds + data.sequence_3utr;
+        } else {
+          data.sequence = normalizeSequence(sequenceInput.value).normalized;
+          delete data.sequence_5utr;
+          delete data.sequence_cds;
+          delete data.sequence_3utr;
+        }
         data.num_samples = Number(data.num_samples);
         data.top_k = Number(data.top_k);
-        data.temperature = Number(data.temperature);
-        data.match_input_length = data.match_input_length === "true";
-        const res = await fetch("/api/generate", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(data)
+        data.temperature = Number(temperature.value);
+        data.match_input_length = true;
+
+        submitButton.disabled = true;
+        filesBox.innerHTML = "";
+        errorBox.classList.remove("show");
+        renderJob({
+          job_id: "submitting",
+          status: "queued",
+          region: data.region,
+          updated_at: new Date().toISOString()
         });
-        const payload = await res.json();
-        if (!res.ok) {
-          statusBox.textContent = payload.detail || "Request failed.";
-          button.disabled = false;
-          return;
+
+        try {
+          const response = await fetch("/api/generate", {
+            method: "POST",
+            headers: {"Content-Type": "application/json", "Accept": "application/json"},
+            body: JSON.stringify(data)
+          });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.detail || "Request failed.");
+          renderJob(payload);
+          poll(payload.job_id);
+        } catch (error) {
+          submitButton.disabled = false;
+          formError.textContent = error.message;
+          setSteps("failed");
         }
-        poll(payload.job_id);
       });
+
+      renderSequence();
+      updateRegionView();
+      refreshHealth();
     </script>
   </body>
 </html>

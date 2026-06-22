@@ -123,6 +123,7 @@ mROSE also includes standalone generation entry points for designing region-spec
 | 5′ UTR | `generation/5utr/generate_5utr.py` | scored 5′ UTR candidates with predicted MRL, MFE, GC and uORF/uAUG features |
 | CDS | `generation/cds/generate_cds.py` | length-matched CDS candidates ranked by model score, CAI, GC and optional MFE |
 | 3′ UTR | `generation/3utr/generate_3utr.py` | scored 3′ UTR candidates with degradation-style prediction, MFE, GC/TC and motif penalties |
+| Full-length mRNA | `mrose_web` API, `region: "full"` | runs the three regional generators, then merges ranked 5′ UTR, CDS and 3′ UTR candidates into full-length mRNA sequences |
 
 The released generation checkpoints are tracked with Git LFS under:
 
@@ -148,6 +149,16 @@ python scripts/generate_sequences.py --run cds
 ```
 
 See [generation/README.md](generation/README.md) for direct commands for 5′ UTR, CDS and 3′ UTR generation.
+
+Full-length mRNA generation is available through the web API because it orchestrates all three regional generators and then merges same-rank component candidates. The request body accepts `sequence_5utr`, `sequence_cds` and `sequence_3utr` templates:
+
+```bash
+curl -X POST http://localhost:8000/api/generate \
+  -H "Content-Type: application/json" \
+  --data @generation/examples/full_mrna_request.json
+```
+
+The full-length job writes `mrose_full_top.csv` and `mrose_full_top.fasta` plus the component top files used for the merge. See [docs/web_server.md](docs/web_server.md) for the API details.
 
 ## Web server
 

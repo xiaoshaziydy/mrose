@@ -6,7 +6,7 @@ The server provides:
 
 - a browser form at `/`;
 - `GET /api/health` for service and checkpoint status;
-- `POST /api/generate` to submit 5′ UTR, CDS or 3′ UTR generation jobs;
+- `POST /api/generate` to submit 5′ UTR, CDS, 3′ UTR or full-length mRNA generation jobs;
 - `GET /api/jobs/{job_id}` to poll job status;
 - `GET /api/jobs/{job_id}/files/{filename}` to download CSV, FASTA and log files.
 
@@ -54,6 +54,7 @@ The server reads these environment variables:
 | `MROSE_WEB_MAX_SEQUENCE_LENGTH` | `6000` | Maximum accepted input sequence length |
 | `MROSE_WEB_MAX_SAMPLES` | `10000` | Maximum accepted `num_samples` |
 | `MROSE_WEB_MAX_TOP_K` | `100` | Maximum accepted `top_k` |
+| `MROSE_WEB_DEFAULT_DEVICE` | `cpu` | Default generation device used when the client does not send one |
 
 For the project server environment, a typical command is:
 
@@ -101,7 +102,7 @@ Use HTTPS in production, for example with Certbot-managed TLS certificates.
 
 ## API example
 
-Submit a job:
+Submit a 5′ UTR job:
 
 ```bash
 curl -X POST http://localhost:8000/api/generate \
@@ -111,10 +112,40 @@ curl -X POST http://localhost:8000/api/generate \
     "sequence": "AGGAATAAACTAGTATTCTTCTGGTCCCCACAGACTCAGAGAGAACCCGCCACC",
     "num_samples": 100,
     "top_k": 10,
-    "device": "cuda:0",
     "temperature": 1.0
   }'
 ```
+
+Submit a full-length mRNA job:
+
+```bash
+curl -X POST http://localhost:8000/api/generate \
+  -H "Content-Type: application/json" \
+  --data @generation/examples/full_mrna_request.json
+```
+
+The full-length request uses:
+
+| Field | Purpose |
+|---|---|
+| `region` | Set to `"full"` |
+| `sequence` | Concatenated full-length template; included for compatibility with the shared request schema |
+| `sequence_5utr` | 5′ UTR template passed to the 5′ UTR generator |
+| `sequence_cds` | CDS template passed to the CDS generator |
+| `sequence_3utr` | 3′ UTR template passed to the 3′ UTR generator |
+| `num_samples` | Number of component candidates generated per region |
+| `top_k` | Number of ranked candidates retained per region and merged by rank |
+| `temperature` | Sampling temperature passed through to each generator |
+| `match_input_length` | When true, applies length matching to the 3′ UTR generator |
+
+For full-length jobs, the server runs the 5′ UTR, CDS and 3′ UTR generators sequentially. It then merges candidate rank 1 with rank 1, rank 2 with rank 2, and so on. The merged outputs are:
+
+```text
+mrose_full_top.csv
+mrose_full_top.fasta
+```
+
+The job directory also retains component files such as `mrose_full_5utr_top.csv`, `mrose_full_cds_top.csv` and `mrose_full_3utr_top.csv` for traceability.
 
 Poll the returned job:
 
@@ -131,4 +162,3 @@ curl -O http://localhost:8000/api/jobs/<job_id>/files/mrose_5utr_top10.csv
 ## Safety notes
 
 The web layer validates region, device, sequence characters, sequence length, sample count and top-k before launching a job. Generation commands are executed as argument lists, not through a shell. Keep the server behind authentication or a private network if it is attached to a GPU host, because each request can consume substantial compute.
-

@@ -11,11 +11,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .jobs import (
+    DEFAULT_DEVICE,
     JOB_ROOT,
     MAX_SAMPLES,
     MAX_SEQUENCE_LENGTH,
     MAX_TOP_K,
-    REGIONS,
+    checkpoint_status,
     create_job,
     list_result_files,
     read_status,
@@ -34,11 +35,14 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 class GenerationRequest(BaseModel):
-    region: Literal["5utr", "cds", "3utr"] = Field(..., description="mRNA region to optimize.")
+    region: Literal["5utr", "cds", "3utr", "full"] = Field(..., description="mRNA region to optimize.")
     sequence: str = Field(..., min_length=1, max_length=MAX_SEQUENCE_LENGTH)
+    sequence_5utr: str | None = Field(default=None, max_length=MAX_SEQUENCE_LENGTH)
+    sequence_cds: str | None = Field(default=None, max_length=MAX_SEQUENCE_LENGTH)
+    sequence_3utr: str | None = Field(default=None, max_length=MAX_SEQUENCE_LENGTH)
     num_samples: int = Field(default=100, ge=1, le=MAX_SAMPLES)
     top_k: int = Field(default=10, ge=1, le=MAX_TOP_K)
-    device: str = Field(default="cuda:0", description="cpu, cuda or cuda:<index>.")
+    device: str = Field(default=DEFAULT_DEVICE, description="cpu, cuda or cuda:<index>.")
     temperature: float = Field(default=1.0, gt=0, le=5)
     match_input_length: bool = Field(default=True, description="Used by the 3' UTR generator.")
 
@@ -50,15 +54,21 @@ def index() -> str:
 
 @app.get("/api/health")
 def health() -> dict[str, object]:
-    checkpoints = {
-        region: cfg["checkpoint"].exists()
-        for region, cfg in REGIONS.items()
-    }
+    checkpoints = checkpoint_status()
+    ready_for_generation = all(item["ready"] for item in checkpoints.values())
     return {
         "status": "ok",
         "service": "mROSE",
         "job_dir": str(JOB_ROOT),
         "checkpoints": checkpoints,
+        "ready_for_generation": ready_for_generation,
+        "default_device": DEFAULT_DEVICE,
+        "regions": {
+            "5utr": {"label": "5' UTR", "ready": checkpoints["5utr"]["ready"]},
+            "cds": {"label": "CDS", "ready": checkpoints["cds"]["ready"]},
+            "3utr": {"label": "3' UTR", "ready": checkpoints["3utr"]["ready"]},
+            "full": {"label": "Full-length mRNA", "ready": ready_for_generation},
+        },
     }
 
 

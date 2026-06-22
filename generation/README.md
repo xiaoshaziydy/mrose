@@ -5,6 +5,7 @@ This folder contains standalone mROSE sequence-generation entry points for the t
 - `5utr/generate_5utr.py`: generate and rank 5′ UTR candidates.
 - `cds/generate_cds.py`: generate length-matched CDS candidates and rank them with model score, CAI, GC and optional MFE.
 - `3utr/generate_3utr.py`: generate and rank 3′ UTR candidates.
+- Full-length mRNA generation is exposed through the web API with `region: "full"`, which orchestrates all three regional generators and merges ranked candidates.
 
 The scripts were packaged from the local generation bundle and are designed to use one checkpoint per region for both candidate generation and scoring.
 
@@ -57,6 +58,16 @@ python scripts/generate_sequences.py --run all
 ```
 
 Outputs are written under `outputs/generation/`, which is ignored by Git.
+
+Submit the full-length mRNA web example after starting `mrose_web`:
+
+```bash
+curl -X POST http://localhost:8000/api/generate \
+  -H "Content-Type: application/json" \
+  --data @generation/examples/full_mrna_request.json
+```
+
+The full-length job writes `mrose_full_top.csv` and `mrose_full_top.fasta` by combining the same-ranked 5′ UTR, CDS and 3′ UTR outputs.
 
 ## Direct commands
 
