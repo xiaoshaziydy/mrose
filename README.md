@@ -155,6 +155,8 @@ See [generation/README.md](generation/README.md) for direct commands for 5′ UT
 
 mROSE includes a lightweight FastAPI web server for online sequence-generation jobs:
 
+Online server: [https://ref-declaration-std-schedules.trycloudflare.com](https://ref-declaration-std-schedules.trycloudflare.com)
+
 ```bash
 pip install -r web-requirements.txt
 uvicorn mrose_web.app:app --host 0.0.0.0 --port 8000
