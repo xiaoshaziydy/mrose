@@ -58,6 +58,27 @@ TASKS = {
             "--output_prefix", "example_3utr",
         ],
     },
+    "full_length": {
+        "label": "Full-length mRNA",
+        "script": ROOT / "generation" / "full_length" / "generate_full_length.py",
+        "checkpoint": [
+            ROOT / "generation" / "5utr" / "Model.pth",
+            ROOT / "generation" / "cds" / "Model.pth",
+            ROOT / "generation" / "3utr" / "Model.pth",
+        ],
+        "input": [
+            ROOT / "generation" / "examples" / "5utr_template.fasta",
+            ROOT / "generation" / "examples" / "cds_template.fasta",
+            ROOT / "generation" / "examples" / "3utr_template.fasta",
+        ],
+        "output_dir": ROOT / "outputs" / "generation" / "full_length_example",
+        "args": [
+            "--num_samples", "100",
+            "--top_k", "5",
+            "--device", "cuda:0",
+            "--output_prefix", "example_full_length",
+        ],
+    },
 }
 
 REQUIRED_MODULES = ["numpy", "pandas", "torch", "Bio", "sklearn", "scipy", "tqdm"]
@@ -70,6 +91,14 @@ def module_available(name: str) -> bool:
 
 def command_for(task: str, python_bin: str) -> list[str]:
     cfg = TASKS[task]
+    if task == "full_length":
+        return [
+            python_bin,
+            str(cfg["script"]),
+            "--output_dir",
+            str(cfg["output_dir"]),
+            *cfg["args"],
+        ]
     return [
         python_bin,
         str(cfg["script"]),
@@ -95,8 +124,8 @@ def print_status(python_bin: str) -> None:
 
     print("Checkpoint check:")
     for key, cfg in TASKS.items():
-        checkpoint = cfg["checkpoint"]
-        status = "OK" if checkpoint.exists() else "missing"
+        checkpoints = cfg["checkpoint"] if isinstance(cfg["checkpoint"], list) else [cfg["checkpoint"]]
+        status = "OK" if all(checkpoint.exists() for checkpoint in checkpoints) else "missing"
         print(f"  {key:4s} {status}")
     print()
 
@@ -110,12 +139,14 @@ def print_status(python_bin: str) -> None:
 def validate_before_run(task: str) -> list[str]:
     problems: list[str] = []
     cfg = TASKS[task]
-    if not cfg["checkpoint"].exists():
-        problems.append(f"missing checkpoint: {cfg['checkpoint']}")
+    checkpoints = cfg["checkpoint"] if isinstance(cfg["checkpoint"], list) else [cfg["checkpoint"]]
+    for checkpoint in checkpoints:
+        if not checkpoint.exists():
+            problems.append(f"missing checkpoint: {checkpoint}")
     for name in REQUIRED_MODULES:
         if not module_available(name):
             problems.append(f"missing Python module: {name}")
-    if task in VIENNA_TASKS and not (module_available("ViennaRNA") or module_available("RNA")):
+    if (task in VIENNA_TASKS or task == "full_length") and not (module_available("ViennaRNA") or module_available("RNA")):
         problems.append("missing Python module: ViennaRNA or RNA")
     return problems
 
@@ -124,7 +155,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Print or run mROSE generation examples.")
     parser.add_argument(
         "--run",
-        choices=["none", "5utr", "cds", "3utr", "all"],
+        choices=["none", "5utr", "cds", "3utr", "full_length", "all"],
         default="none",
         help="Run an example task. Default only prints commands and checks.",
     )

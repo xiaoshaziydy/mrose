@@ -5,6 +5,7 @@ This folder contains standalone mROSE sequence-generation entry points for the t
 - `5utr/generate_5utr.py`: generate and rank 5′ UTR candidates.
 - `cds/generate_cds.py`: generate length-matched CDS candidates and rank them with model score, CAI, GC and optional MFE.
 - `3utr/generate_3utr.py`: generate and rank 3′ UTR candidates.
+- `full_length/generate_full_length.py`: run the three regional generators and merge same-rank 5′ UTR, CDS and 3′ UTR candidates into full-length mRNA candidates.
 
 The scripts were packaged from the local generation bundle and are designed to use one checkpoint per region for both candidate generation and scoring.
 
@@ -48,6 +49,7 @@ Run one example task:
 python scripts/generate_sequences.py --run 5utr
 python scripts/generate_sequences.py --run cds
 python scripts/generate_sequences.py --run 3utr
+python scripts/generate_sequences.py --run full_length
 ```
 
 Run all example tasks:
@@ -99,6 +101,33 @@ python generation/3utr/generate_3utr.py \
   --output_dir outputs/generation/3utr_example \
   --output_prefix example_3utr
 ```
+
+Full-length mRNA:
+
+```bash
+python generation/full_length/generate_full_length.py \
+  --five_utr_fasta generation/examples/5utr_template.fasta \
+  --cds_fasta generation/examples/cds_template.fasta \
+  --three_utr_fasta generation/examples/3utr_template.fasta \
+  --num_samples 20 \
+  --top_k 5 \
+  --device cpu \
+  --output_dir outputs/generation/full_length_example \
+  --output_prefix example_full_length
+```
+
+The full-length launcher writes regional outputs under:
+
+```text
+outputs/generation/full_length_example/
+├── 5utr/
+├── cds/
+├── 3utr/
+├── example_full_length_top5.csv
+└── example_full_length_top5.fasta
+```
+
+Rows are merged by rank: rank 1 5′ UTR + rank 1 CDS + rank 1 3′ UTR, rank 2 + rank 2 + rank 2, and so on.
 
 ## Runtime notes
 
