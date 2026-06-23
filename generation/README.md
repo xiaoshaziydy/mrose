@@ -107,10 +107,13 @@ python generation/3utr/generate_3utr.py \
   --num_samples 20 \
   --top_k 5 \
   --device cpu \
-  --match_input_length \
   --output_dir outputs/generation/3utr_example \
   --output_prefix example_3utr
 ```
+
+By default, 3′ UTR candidates are allowed to vary in length. Add
+`--match_input_length` only if you specifically need legacy input-length
+matching.
 
 ### Full-length mRNA
 

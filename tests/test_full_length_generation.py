@@ -7,6 +7,32 @@ from generation.full_length import generate_full_length
 
 
 class FullLengthGenerationTest(unittest.TestCase):
+    def test_three_utr_component_is_not_fixed_to_input_length(self):
+        args = SimpleNamespace(
+            output_dir=Path("/tmp/out"),
+            num_samples=10,
+            top_k=2,
+            python="python",
+            five_utr_script=Path("generation/5utr/generate_5utr.py"),
+            five_utr_checkpoint=Path("generation/5utr/Model.pth"),
+            five_utr_fasta=Path("generation/examples/5utr_template.fasta"),
+            cds_script=Path("generation/cds/generate_cds.py"),
+            cds_checkpoint=Path("generation/cds/Model.pth"),
+            cds_fasta=Path("generation/examples/cds_template.fasta"),
+            three_utr_script=Path("generation/3utr/generate_3utr.py"),
+            three_utr_checkpoint=Path("generation/3utr/Model.pth"),
+            three_utr_fasta=Path("generation/examples/3utr_template.fasta"),
+            device="cpu",
+            temperature=1.0,
+            output_prefix="example",
+            cds_mfe_weight=0.0,
+            cds_batch_size=32,
+        )
+
+        commands = generate_full_length.build_commands(args)
+
+        self.assertNotIn("--match_input_length", commands["3utr"])
+
     def test_merge_outputs_combines_same_rank_regions(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp)

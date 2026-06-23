@@ -307,7 +307,6 @@ def build_commands(args: argparse.Namespace) -> dict[str, list[str]]:
             str(args.temperature),
             "--output_prefix",
             f"{args.output_prefix}_3utr",
-            "--match_input_length",
         ],
     }
 

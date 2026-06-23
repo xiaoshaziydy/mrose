@@ -44,7 +44,7 @@ class GenerationRequest(BaseModel):
     top_k: int = Field(default=10, ge=1, le=MAX_TOP_K)
     device: str = Field(default=DEFAULT_DEVICE, description="cpu, cuda or cuda:<index>.")
     temperature: float = Field(default=1.0, gt=0, le=5)
-    match_input_length: bool = Field(default=True, description="Used by the 3' UTR generator.")
+    match_input_length: bool = Field(default=False, description="Optional legacy 3' UTR length matching.")
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -54,7 +54,6 @@ TASKS = {
             "--num_samples", "10000",
             "--top_k", "5",
             "--device", "cuda:0",
-            "--match_input_length",
             "--output_prefix", "example_3utr",
         ],
     },
