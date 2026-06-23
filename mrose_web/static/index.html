@@ -970,6 +970,23 @@
         "3utr": "GCTGCCCTGCTGCTGCTGCTGCTGCTGCTGCTGCTGCCCTGAGGCTGAGCTGAGCTGAGCTGAGCTGAGCTGAGCTGAGCTGAGCTGAATAAA"
       };
 
+      const previewColumns = {
+        "5utr": ["rank", "sequence", "length", "mrl_pred", "mfe", "final_score"],
+        "cds": ["rank", "sequence", "length_nt", "pred_value", "CAI", "MFE", "final_score", "aa_match"],
+        "3utr": ["rank", "sequence", "length", "pred_value", "MFE", "final_score"],
+        "full": [
+          "rank",
+          "sequence",
+          "full_length",
+          "five_utr_length",
+          "cds_length",
+          "three_utr_length",
+          "five_utr_score",
+          "cds_score",
+          "three_utr_score"
+        ]
+      };
+
       const stepOrder = ["queued", "running", "succeeded", "failed"];
       let pollTimer = null;
       let healthPayload = null;
@@ -1204,19 +1221,44 @@
         return rows;
       }
 
-      function renderCsvTable(rows) {
+      function previewColumnIndexes(headers, region) {
+        const wanted = previewColumns[region] || [];
+        const indexes = wanted
+          .map((name) => headers.indexOf(name))
+          .filter((index) => index >= 0);
+        if (indexes.length) return indexes;
+        return headers
+          .map((_, index) => index)
+          .filter((index) => ![
+            "uAUG",
+            "uORF",
+            "GC",
+            "gc",
+            "CGratio",
+            "ATratio",
+            "mrl_score",
+            "mfe_score",
+            "MFE_score",
+            "gc_score",
+            "GC_window_score",
+            "uAUG_uORF_penalty"
+          ].includes(headers[index]));
+      }
+
+      function renderCsvTable(rows, region) {
         csvTableWrap.innerHTML = "";
         if (rows.length < 2) {
           csvPreview.classList.remove("show");
           return;
         }
+        const columnIndexes = previewColumnIndexes(rows[0], region);
         const table = document.createElement("table");
         table.className = "csv-table";
         const thead = document.createElement("thead");
         const headRow = document.createElement("tr");
-        for (const heading of rows[0]) {
+        for (const index of columnIndexes) {
           const th = document.createElement("th");
-          th.textContent = heading;
+          th.textContent = rows[0][index];
           headRow.appendChild(th);
         }
         thead.appendChild(headRow);
@@ -1225,7 +1267,7 @@
         const tbody = document.createElement("tbody");
         for (const row of rows.slice(1)) {
           const tr = document.createElement("tr");
-          for (let index = 0; index < rows[0].length; index += 1) {
+          for (const index of columnIndexes) {
             const td = document.createElement("td");
             td.textContent = row[index] || "";
             tr.appendChild(td);
@@ -1256,10 +1298,10 @@
         return files.find((name) => name.endsWith(".csv") && !name.includes("_all_scored")) || "";
       }
 
-      async function loadCsvPreview(jobId, filename) {
+      async function loadCsvPreview(jobId, filename, region) {
         const response = await fetch(`/api/jobs/${jobId}/files/${encodeURIComponent(filename)}`);
         if (!response.ok) throw new Error("CSV preview unavailable.");
-        renderCsvTable(parseCsv(await response.text()));
+        renderCsvTable(parseCsv(await response.text()), region);
       }
 
       function renderJob(job) {
@@ -1280,7 +1322,7 @@
           link.textContent = resultCsv;
           filesBox.appendChild(link);
           if (job.status === "succeeded") {
-            loadCsvPreview(job.job_id, resultCsv).catch(() => {
+            loadCsvPreview(job.job_id, resultCsv, job.region).catch(() => {
               csvPreview.classList.remove("show");
             });
           }
