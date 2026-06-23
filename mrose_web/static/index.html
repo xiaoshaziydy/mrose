@@ -738,22 +738,6 @@
         display: block;
       }
 
-      .csv-preview-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        border-bottom: 1px solid var(--hairline);
-        padding: 12px 14px;
-        background: var(--soft-stone);
-      }
-
-      .csv-preview-head b {
-        font-family: var(--mono);
-        font-size: 0.78rem;
-        font-weight: 400;
-      }
-
       .csv-table-wrap {
         max-height: 360px;
         overflow: auto;
@@ -1075,9 +1059,6 @@
             </div>
             <div class="files" id="files"></div>
             <div class="csv-preview" id="csv-preview">
-              <div class="csv-preview-head">
-                <b id="csv-title">mrose_5utr_top10.csv</b>
-              </div>
               <div class="csv-table-wrap" id="csv-table-wrap"></div>
             </div>
             <div class="error-box" id="error-box"></div>
@@ -1110,7 +1091,6 @@
       const formError = document.querySelector("#form-error");
       const filesBox = document.querySelector("#files");
       const csvPreview = document.querySelector("#csv-preview");
-      const csvTitle = document.querySelector("#csv-title");
       const csvTableWrap = document.querySelector("#csv-table-wrap");
       const errorBox = document.querySelector("#error-box");
       const jobIdBox = document.querySelector("#job-id");
@@ -1478,7 +1458,6 @@
         errorBox.textContent = "";
         const resultCsv = primaryCsvName(job);
         if (resultCsv) {
-          csvTitle.textContent = resultCsv;
           const link = document.createElement("a");
           link.href = `/api/jobs/${job.job_id}/files/${encodeURIComponent(resultCsv)}`;
           link.textContent = resultCsv;
