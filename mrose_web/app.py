@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field
 
 from .jobs import (
     DEFAULT_DEVICE,
-    JOB_ROOT,
     MAX_SAMPLES,
     MAX_SEQUENCE_LENGTH,
     MAX_TOP_K,
@@ -25,6 +24,7 @@ from .jobs import (
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+PRIVATE_STATUS_FIELDS = {"command", "commands", "device"}
 
 app = FastAPI(
     title="mROSE Web Server",
@@ -56,13 +56,15 @@ def index() -> str:
 def health() -> dict[str, object]:
     checkpoints = checkpoint_status()
     ready_for_generation = all(item["ready"] for item in checkpoints.values())
+    public_checkpoints = {
+        region: {"ready": bool(item["ready"])}
+        for region, item in checkpoints.items()
+    }
     return {
         "status": "ok",
         "service": "mROSE",
-        "job_dir": str(JOB_ROOT),
-        "checkpoints": checkpoints,
+        "checkpoints": public_checkpoints,
         "ready_for_generation": ready_for_generation,
-        "default_device": DEFAULT_DEVICE,
         "limits": {
             "max_sequence_length": MAX_SEQUENCE_LENGTH,
             "max_samples": MAX_SAMPLES,
@@ -77,10 +79,18 @@ def health() -> dict[str, object]:
     }
 
 
+def public_status(status: dict[str, object]) -> dict[str, object]:
+    return {
+        key: value
+        for key, value in status.items()
+        if key not in PRIVATE_STATUS_FIELDS
+    }
+
+
 @app.post("/api/generate", status_code=202)
 def submit_generation(payload: GenerationRequest) -> dict[str, object]:
     try:
-        return create_job(**payload.dict())
+        return public_status(create_job(**payload.dict()))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -91,7 +101,7 @@ def get_job(job_id: str) -> dict[str, object]:
     if status is None:
         raise HTTPException(status_code=404, detail="Job not found.")
     status["files"] = list_result_files(job_id)
-    return status
+    return public_status(status)
 
 
 @app.get("/api/jobs/{job_id}/files/{filename}")

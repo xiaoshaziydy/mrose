@@ -153,7 +153,10 @@ def read_status(job_id: str) -> dict[str, Any] | None:
     path = status_path(job_id)
     if not path.exists():
         return None
-    return json.loads(path.read_text())
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return None
 
 
 def list_result_files(job_id: str) -> list[str]:
