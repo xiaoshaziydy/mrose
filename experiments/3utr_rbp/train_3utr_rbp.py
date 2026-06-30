@@ -961,7 +961,7 @@ torch.cuda.set_device(rank)
 # Initialize distributed training
 init_ddp(rank, world_size)
 # Train every configured fold exactly once.
-for j in range(1, 5):
+for j in range(1,6):
     logger.info(f'Rank {rank}: Starting fold {j}')
     device = torch.device(f'cuda:{rank}')
     vocab = {'<PAD>': 0,'<SOS>': 1, '<EOS>': 2, '<UNK>': 3,'A': 4, 'T': 5, 'G': 6, 'C': 7, '<CLS>': 8}
