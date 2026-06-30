@@ -1404,36 +1404,15 @@ def evaluate_model(model, data_loader, device, noise_std, max_len, codon_table, 
     avg_loss = total_loss / num_batches
 
     return spearman_corr, pearson_corr, r2, rmse, mae, avg_loss
-class EarlyStopping:
-    def __init__(self, patience=10, verbose=False):
-        self.patience = patience
-        self.verbose = verbose
-        self.counter = 0
-        self.best_score = None
-        self.early_stop = False
-    def __call__(self, val_loss, model):
-        score = -val_loss
-        if self.best_score is None:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model)
-        elif score < self.best_score:
-            self.counter += 1
-            if self.verbose:
-                print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_score = score
-            self.counter = 0
-            self.save_checkpoint(val_loss, model)
-    def save_checkpoint(self, val_loss, model):
-        torch.save(model.state_dict(), 'best_model.pth')
-        if self.verbose:
-            print(f'Test loss improved ({self.best_score:.6f} --> {val_loss:.6f}). Saving model ...')
+
+
 def train_and_evaluate(args,train_csv,test_csv, device, param_combo, trial_id, logger):
 
     logger.info(f"Trial {trial_id}: {param_combo}")
     try:
+        if args.epochs <= 0 or args.epochs % 10 != 0:
+            raise ValueError("args.epochs must be a positive multiple of 10")
+
         # Adjust max_len
         if args.max_len % 3 != 0:
             args.max_len = args.max_len - (args.max_len % 3)
@@ -1519,26 +1498,11 @@ def train_and_evaluate(args,train_csv,test_csv, device, param_combo, trial_id, l
             char_to_idx=char_to_idx,
             nuc_char_to_idx=nuc_char_to_idx
         ).to(device)
-        # Synchronize model parameters
-        '''
-        state_dict_list = [None]
-
-        if rank == 0:
-            logger.info(f"Rank {rank}: Broadcasting model state for trial {trial_id}")
-            state_dict_list[0] = model.state_dict()
-        dist.barrier()
-        dist.broadcast_object_list(state_dict_list, src=0)
-        model.load_state_dict(state_dict_list[0])
-        dist.barrier()
-        logger.info(f"Rank {rank}: Model state loaded for trial {trial_id}")
-        '''
-        #model = DDP(model, device_ids=[rank], find_unused_parameters=True)
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=1e-5)
         noise_schedule = cosine_noise_schedule(initial_noise_std=0.01, max_noise_std=0.1, total_epochs=args.epochs)
         lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=param_combo['milestones'], gamma=0.1)
-        early_stopping = EarlyStopping(patience=20, verbose=True)
         # Training loop
-        best_spearman = 0.0
+        test_metrics = None
         for epoch in range(args.epochs):
             model.train()
             total_loss = 0.0
@@ -1558,21 +1522,29 @@ def train_and_evaluate(args,train_csv,test_csv, device, param_combo, trial_id, l
             for param_group in optimizer.param_groups:
                 if param_group['lr'] < 0.000005:
                     param_group['lr'] = 0.000005
-            # Evaluate model
-            spearman_corr, pearson_corr, r2, rmse, mae, test_loss = evaluate_model(model, test_loader, device, 0, args.max_len, codon_table, idx_to_char)
-            print(f'Epoch {epoch+1}/{args.epochs} | '
-                  f'Spearman: {spearman_corr:.4f} | '
-                  f'Pearson: {pearson_corr:.4f} | R2: {r2:.4f} | RMSE: {rmse:.4f} | MAE: {mae:.4f}')
-            early_stopping(-spearman_corr, model) # Use model.
-            if early_stopping.early_stop:
-                logger.info(f"Trial {trial_id}: Early stopping triggered")
-                break
-            if spearman_corr > best_spearman:
-                best_spearman = spearman_corr
-                checkpoint_path = os.path.join(args.output_dir, f'trial_{trial_id}_epoch_{epoch+1}_spearman_{spearman_corr:.4f}.pth')
-                torch.save(model.state_dict(), checkpoint_path) # Use model..state_dict()
-                logger.info(f'Trial {trial_id}: Saved checkpoint: {checkpoint_path}')
-        return best_spearman, spearman_corr, test_loss
+            logger.info(
+                f'Epoch {epoch + 1}/{args.epochs} | Train Loss: {avg_loss:.4f}'
+            )
+            if (epoch + 1) % 10 == 0:
+                test_metrics = evaluate_model(
+                    model, test_loader, device, 0, args.max_len,
+                    codon_table, idx_to_char
+                )
+                spearman_corr, pearson_corr, r2, rmse, mae, test_loss = test_metrics
+                print(
+                    f'Test at epoch {epoch + 1}/{args.epochs} | '
+                    f'Spearman: {spearman_corr:.4f} | Pearson: {pearson_corr:.4f} | '
+                    f'R2: {r2:.4f} | RMSE: {rmse:.4f} | MAE: {mae:.4f}'
+                )
+
+        spearman_corr, pearson_corr, r2, rmse, mae, test_loss = test_metrics
+        checkpoint_path = os.path.join(
+            args.output_dir,
+            f'trial_{trial_id}_final_epoch_{args.epochs}_spearman_{spearman_corr:.4f}.pth'
+        )
+        torch.save(model.state_dict(), checkpoint_path)
+        logger.info(f'Trial {trial_id}: Saved final checkpoint: {checkpoint_path}')
+        return spearman_corr, pearson_corr, test_loss
     except Exception as e:
         logger.error(f"Trial {trial_id}: Error occurred: {str(e)}")
         logger.error(traceback.format_exc())

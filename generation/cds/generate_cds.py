@@ -1360,32 +1360,6 @@ def evaluate_model(model, data_loader, device, noise_std, max_len, codon_table, 
     spearman_corr, _ = spearmanr (all_labels, all_preds)
     avg_loss = total_loss /num_batches
     return mse, rmse, r2, pearson_corr, spearman_corr, avg_loss
-class EarlyStopping:
-    def __init__(self, patience=10, verbose=False):
-        self.patience = patience
-        self.verbose = verbose
-        self.counter = 0
-        self.best_score = None
-        self.early_stop = False
-    def __call__(self, val_loss, model):
-        score = -val_loss
-        if self.best_score is None:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model)
-        elif score < self.best_score:
-            self.counter += 1
-            if self.verbose:
-                print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_score = score
-            self.counter = 0
-            self.save_checkpoint(val_loss, model)
-    def save_checkpoint(self, val_loss, model):
-        torch.save(model.state_dict(), 'best_model.pth')
-        if self.verbose:
-            print(f'Test loss improved ({self.best_score:.6f} --> {val_loss:.6f}). Saving model ...')
 
 def build_vocabularies():
     """Build codon and nucleotide vocabularies used by the pretrained model."""
@@ -1528,7 +1502,6 @@ def save_training_checkpoint(path, model, optimizer, epoch, args, metrics, best_
         'args': vars(args),
         'metrics': metrics,
         'best_spearman': best_spearman,
-        'resume_checkpoint': args.resume_checkpoint,
     }, path)
 
 
@@ -1536,16 +1509,8 @@ def train_single_gpu(args):
     os.makedirs(args.output_dir, exist_ok=True)
     logger = setup_logging(rank=0, output_dir=args.output_dir)
     set_seed(args.seed)
-
-    if not os.path.exists(args.resume_checkpoint):
-        raise FileNotFoundError(f'Cannot find checkpoint: {args.resume_checkpoint}')
-
-    # Load checkpoint before building the model and datasets, so max_len/embed_dim/hidden_dim/latent_dim
-    # can be matched to the pretrained trial automatically.
-    checkpoint_cpu = torch.load(args.resume_checkpoint, map_location='cpu')
-    state_dict_cpu = resolve_state_dict(checkpoint_cpu)
-    if args.auto_match_checkpoint:
-        args = apply_inferred_hparams(args, infer_checkpoint_hparams(state_dict_cpu))
+    if args.epochs <= 0 or args.epochs % 10 != 0:
+        raise ValueError("--epochs must be a positive multiple of 10")
 
     if args.max_len % 3 != 0:
         args.max_len = args.max_len - (args.max_len % 3)
@@ -1599,24 +1564,8 @@ def train_single_gpu(args):
     )
 
     model = create_model(args, vocab_info, device)
-
-    checkpoint = checkpoint_cpu
-    state_dict = state_dict_cpu
-    incompatible = model.load_state_dict(state_dict, strict=args.strict_load)
-    if not args.strict_load:
-        print(f'Missing keys: {incompatible.missing_keys}')
-        print(f'Unexpected keys: {incompatible.unexpected_keys}')
-    print(f'Loaded pretrained checkpoint: {args.resume_checkpoint}')
-
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-    if args.resume_optimizer and isinstance(checkpoint, dict) and 'optimizer_state_dict' in checkpoint:
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        for group in optimizer.param_groups:
-            group['lr'] = args.learning_rate
-            group['weight_decay'] = args.weight_decay
-        print('Optimizer state loaded and LR was reset for continued training.')
-    else:
-        print('Using a fresh optimizer for continued training.')
+    print('Training model from random initialization with a fresh optimizer.')
 
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer, T_0=args.scheduler_t0, T_mult=args.scheduler_t_mult, eta_min=args.min_lr
@@ -1626,26 +1575,11 @@ def train_single_gpu(args):
         max_noise_std=args.max_noise_std,
         total_epochs=max(1, args.epochs)
     )
-    writer = SummaryWriter(log_dir=os.path.join(args.tensorboard_dir, f'single_gpu_continue_{datetime.now().strftime("%Y%m%d_%H%M%S")}'))
-
-    start_metrics = {}
-    mse, rmse, r2, pearson_corr, spearman_corr, test_loss = evaluate_model(
-        model, test_loader, device, 0.0, args.max_len, vocab_info['codon_table'], vocab_info['idx_to_char']
-    )
-    start_metrics.update({'mse': mse, 'rmse': rmse, 'r2': r2, 'pearson': pearson_corr, 'spearman': spearman_corr, 'test_loss': test_loss})
-    print(f'Before continued training | Test Loss: {test_loss:.4f} | Spearman: {spearman_corr:.4f} | '
-          f'Pearson: {pearson_corr:.4f} | R2: {r2:.4f} | RMSE: {rmse:.4f} | MSE: {mse:.4f}')
-
-    best_spearman_corr = spearman_corr if np.isfinite(spearman_corr) else -np.inf
-    best_epoch = args.start_epoch
-    early_stop_counter = 0
-
-    initial_copy_path = os.path.join(
-        args.output_dir,
-        f'loaded_from_epoch_{args.start_epoch}_initial_spearman_corr_{spearman_corr:.4f}.pth'
-    )
-    save_training_checkpoint(initial_copy_path, model, optimizer, args.start_epoch, args, start_metrics, best_spearman_corr)
-    print(f'Initial loaded model copied to: {initial_copy_path}')
+    writer = SummaryWriter(log_dir=os.path.join(
+        args.tensorboard_dir,
+        f'single_gpu_train_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    ))
+    test_metrics = None
 
     for epoch in range(args.epochs):
         model.train()
@@ -1670,69 +1604,53 @@ def train_single_gpu(args):
             if param_group['lr'] < args.min_lr:
                 param_group['lr'] = args.min_lr
 
-        current_epoch = args.start_epoch + epoch + 1
-        mse, rmse, r2, pearson_corr, spearman_corr, test_loss = evaluate_model(
-            model, test_loader, device, 0.0, args.max_len,
-            vocab_info['codon_table'], vocab_info['idx_to_char']
-        )
-        metrics = {
-            'mse': mse,
-            'rmse': rmse,
-            'r2': r2,
-            'pearson': pearson_corr,
-            'spearman': spearman_corr,
-            'test_loss': test_loss,
-            'train_loss': avg_loss,
-            'lr': optimizer.param_groups[0]['lr'],
-        }
-
+        current_epoch = epoch + 1
         writer.add_scalar('Train/Loss', avg_loss, current_epoch)
         writer.add_scalar('Train/LR', optimizer.param_groups[0]['lr'], current_epoch)
-        writer.add_scalar('Test/Spearman', spearman_corr, current_epoch)
-        writer.add_scalar('Test/Pearson', pearson_corr, current_epoch)
-        writer.add_scalar('Test/R2', r2, current_epoch)
-        writer.add_scalar('Test/MSE', mse, current_epoch)
+        print(
+            f'Epoch {current_epoch}/{args.epochs} | Train Loss: {avg_loss:.4f} | '
+            f'LR: {optimizer.param_groups[0]["lr"]:.2e}'
+        )
 
-        print(f'Continue Epoch {current_epoch} | Train Loss: {avg_loss:.4f} | Test Loss: {test_loss:.4f} | '
-              f'Spearman: {spearman_corr:.4f} | Pearson: {pearson_corr:.4f} | R2: {r2:.4f} | '
-              f'RMSE: {rmse:.4f} | MSE: {mse:.4f} | LR: {optimizer.param_groups[0]["lr"]:.2e}')
-
-        last_path = os.path.join(args.output_dir, 'last_continue_single_gpu.pth')
-        save_training_checkpoint(last_path, model, optimizer, current_epoch, args, metrics, best_spearman_corr)
-
-        improved = np.isfinite(spearman_corr) and (spearman_corr > best_spearman_corr + args.min_delta)
-        if improved:
-            best_spearman_corr = spearman_corr
-            best_epoch = current_epoch
-            early_stop_counter = 0
-            checkpoint_path = os.path.join(
-                args.output_dir,
-                f'continued_from_trial_1_epoch_{current_epoch}_spearman_corr_{spearman_corr:.4f}.pth'
+        if current_epoch % 10 == 0:
+            mse, rmse, r2, pearson_corr, spearman_corr, test_loss = evaluate_model(
+                model, test_loader, device, 0.0, args.max_len,
+                vocab_info['codon_table'], vocab_info['idx_to_char']
             )
-            save_training_checkpoint(checkpoint_path, model, optimizer, current_epoch, args, metrics, best_spearman_corr)
-            print(f'New best continued model saved: {checkpoint_path}')
-        else:
-            early_stop_counter += 1
-            print(f'EarlyStopping counter: {early_stop_counter} out of {args.patience}')
-            if early_stop_counter >= args.patience:
-                print(f'Early stopping at epoch {current_epoch}. Best epoch: {best_epoch}, Best Spearman: {best_spearman_corr:.4f}')
-                break
+            test_metrics = {
+                'mse': mse, 'rmse': rmse, 'r2': r2,
+                'pearson': pearson_corr, 'spearman': spearman_corr,
+                'test_loss': test_loss, 'train_loss': avg_loss,
+                'lr': optimizer.param_groups[0]['lr'],
+            }
+            writer.add_scalar('Test/Spearman', spearman_corr, current_epoch)
+            writer.add_scalar('Test/Pearson', pearson_corr, current_epoch)
+            writer.add_scalar('Test/R2', r2, current_epoch)
+            writer.add_scalar('Test/MSE', mse, current_epoch)
+            print(
+                f'Test at epoch {current_epoch} | Test Loss: {test_loss:.4f} | '
+                f'Spearman: {spearman_corr:.4f} | Pearson: {pearson_corr:.4f} | '
+                f'R2: {r2:.4f} | RMSE: {rmse:.4f} | MSE: {mse:.4f}'
+            )
+
+    final_path = os.path.join(args.output_dir, 'final_single_gpu.pth')
+    save_training_checkpoint(
+        final_path, model, optimizer, args.epochs, args,
+        test_metrics, test_metrics['spearman']
+    )
+    print(f'Final-epoch model saved: {final_path}')
 
     writer.close()
     if device.type == 'cuda':
         torch.cuda.empty_cache()
 
-    summary_path = os.path.join(args.output_dir, 'continue_training_summary.txt')
+    summary_path = os.path.join(args.output_dir, 'training_summary.txt')
     with open(summary_path, 'w') as f:
-        f.write(f'Resume checkpoint: {args.resume_checkpoint}\n')
-        f.write(f'Start epoch: {args.start_epoch}\n')
-        f.write(f'Initial Spearman: {start_metrics["spearman"]:.4f}\n')
-        f.write(f'Best continued Spearman: {best_spearman_corr:.4f}\n')
-        f.write(f'Best continued epoch: {best_epoch}\n')
+        f.write('Training initialization: random\n')
+        f.write(f'Final epoch: {args.epochs}\n')
+        f.write(f'Final Spearman: {test_metrics["spearman"]:.4f}\n')
         f.write(f'Output dir: {args.output_dir}\n')
-    print('\nContinued single-GPU training finished!')
-    print(f'Best continued Spearman: {best_spearman_corr:.4f}')
-    print(f'Best continued epoch: {best_epoch}')
+    print('\nSingle-GPU training finished!')
     print(f'Summary saved to: {summary_path}')
 
 
@@ -1768,12 +1686,11 @@ def save_training_checkpoint_unwrapped(path, model, optimizer, epoch, args, metr
         'args': vars(args),
         'metrics': metrics,
         'best_spearman': best_spearman,
-        'resume_checkpoint': args.resume_checkpoint,
     }, path)
 
 
 def train_ddp(args):
-    """Continue training from the pretrained checkpoint using DDP on visible GPUs.
+    """Train a randomly initialized model using DDP on visible GPUs.
 
     Launch example:
         CUDA_VISIBLE_DEVICES=0,2 torchrun --standalone --nproc_per_node=2 continue_train_ddp_from_trial1_fixed.py ...
@@ -1804,13 +1721,8 @@ def train_ddp(args):
     logger.info(f'Rank {rank}/{world_size} started on local_rank={local_rank}, device={device}')
 
     try:
-        if not os.path.exists(args.resume_checkpoint):
-            raise FileNotFoundError(f'Cannot find checkpoint: {args.resume_checkpoint}')
-
-        checkpoint_cpu = torch.load(args.resume_checkpoint, map_location='cpu')
-        state_dict_cpu = resolve_state_dict(checkpoint_cpu)
-        if args.auto_match_checkpoint:
-            args = apply_inferred_hparams(args, infer_checkpoint_hparams(state_dict_cpu))
+        if args.epochs <= 0 or args.epochs % 10 != 0:
+            raise ValueError("--epochs must be a positive multiple of 10")
 
         if args.max_len % 3 != 0:
             args.max_len = args.max_len - (args.max_len % 3)
@@ -1864,12 +1776,8 @@ def train_ddp(args):
             )
 
         model = create_model(args, vocab_info, device)
-        incompatible = model.load_state_dict(state_dict_cpu, strict=args.strict_load)
         if rank == 0:
-            if not args.strict_load:
-                print(f'Missing keys: {incompatible.missing_keys}')
-                print(f'Unexpected keys: {incompatible.unexpected_keys}')
-            print(f'Loaded pretrained checkpoint: {args.resume_checkpoint}')
+            print('Training model from random initialization with a fresh optimizer.')
             print(f'Target devices: CUDA_VISIBLE_DEVICES={os.environ.get("CUDA_VISIBLE_DEVICES")}; each process uses cuda:{local_rank}')
 
         model = DDP(
@@ -1879,16 +1787,10 @@ def train_ddp(args):
             find_unused_parameters=True
         )
 
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-        if args.resume_optimizer and isinstance(checkpoint_cpu, dict) and 'optimizer_state_dict' in checkpoint_cpu:
-            optimizer.load_state_dict(checkpoint_cpu['optimizer_state_dict'])
-            for group in optimizer.param_groups:
-                group['lr'] = args.learning_rate
-                group['weight_decay'] = args.weight_decay
-            if rank == 0:
-                print('Optimizer state loaded and LR was reset for continued DDP training.')
-        elif rank == 0:
-            print('Using a fresh optimizer for continued DDP training.')
+        optimizer = torch.optim.AdamW(
+            model.parameters(), lr=args.learning_rate,
+            weight_decay=args.weight_decay
+        )
 
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             optimizer, T_0=args.scheduler_t0, T_mult=args.scheduler_t_mult, eta_min=args.min_lr
@@ -1901,36 +1803,11 @@ def train_ddp(args):
 
         writer = None
         if rank == 0:
-            writer = SummaryWriter(log_dir=os.path.join(args.tensorboard_dir, f'ddp_continue_{datetime.now().strftime("%Y%m%d_%H%M%S")}'))
-
-        # Initial full-test evaluation on rank 0 only.
-        best_spearman_corr = -np.inf
-        best_epoch = args.start_epoch
-        early_stop_counter = 0
-        start_metrics = {}
-
-        if rank == 0:
-            raw_model = model.module
-            mse, rmse, r2, pearson_corr, spearman_corr, test_loss = evaluate_model(
-                raw_model, test_loader_rank0, device, 0.0, args.max_len,
-                vocab_info['codon_table'], vocab_info['idx_to_char']
-            )
-            start_metrics.update({'mse': mse, 'rmse': rmse, 'r2': r2, 'pearson': pearson_corr, 'spearman': spearman_corr, 'test_loss': test_loss})
-            print(f'Before continued DDP training | Test Loss: {test_loss:.4f} | Spearman: {spearman_corr:.4f} | '
-                  f'Pearson: {pearson_corr:.4f} | R2: {r2:.4f} | RMSE: {rmse:.4f} | MSE: {mse:.4f}')
-            best_spearman_corr = spearman_corr if np.isfinite(spearman_corr) else -np.inf
-            initial_copy_path = os.path.join(
-                args.output_dir,
-                f'loaded_from_epoch_{args.start_epoch}_initial_spearman_corr_{spearman_corr:.4f}.pth'
-            )
-            save_training_checkpoint_unwrapped(initial_copy_path, model, optimizer, args.start_epoch, args, start_metrics, best_spearman_corr)
-            print(f'Initial loaded model copied to: {initial_copy_path}')
-
-        # Broadcast the initial best Spearman to all ranks.
-        best_tensor = torch.tensor([best_spearman_corr], dtype=torch.float32, device=device)
-        dist.broadcast(best_tensor, src=0)
-        best_spearman_corr = float(best_tensor.item())
-        stop_training = False
+            writer = SummaryWriter(log_dir=os.path.join(
+                args.tensorboard_dir,
+                f'ddp_train_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+            ))
+        test_metrics = None
 
         for epoch in range(args.epochs):
             if hasattr(train_loader.sampler, 'set_epoch'):
@@ -1963,87 +1840,59 @@ def train_ddp(args):
                 if param_group['lr'] < args.min_lr:
                     param_group['lr'] = args.min_lr
 
-            current_epoch = args.start_epoch + epoch + 1
+            current_epoch = epoch + 1
 
             if rank == 0:
-                raw_model = model.module
-                mse, rmse, r2, pearson_corr, spearman_corr, test_loss = evaluate_model(
-                    raw_model, test_loader_rank0, device, 0.0, args.max_len,
-                    vocab_info['codon_table'], vocab_info['idx_to_char']
-                )
-                metrics = {
-                    'mse': mse,
-                    'rmse': rmse,
-                    'r2': r2,
-                    'pearson': pearson_corr,
-                    'spearman': spearman_corr,
-                    'test_loss': test_loss,
-                    'train_loss': avg_loss,
-                    'lr': optimizer.param_groups[0]['lr'],
-                }
-
                 writer.add_scalar('Train/Loss', avg_loss, current_epoch)
                 writer.add_scalar('Train/LR', optimizer.param_groups[0]['lr'], current_epoch)
-                writer.add_scalar('Test/Spearman', spearman_corr, current_epoch)
-                writer.add_scalar('Test/Pearson', pearson_corr, current_epoch)
-                writer.add_scalar('Test/R2', r2, current_epoch)
-                writer.add_scalar('Test/MSE', mse, current_epoch)
+                print(
+                    f'DDP Epoch {current_epoch}/{args.epochs} | '
+                    f'Train Loss: {avg_loss:.4f} | '
+                    f'LR: {optimizer.param_groups[0]["lr"]:.2e}'
+                )
 
-                print(f'DDP Continue Epoch {current_epoch} | Train Loss: {avg_loss:.4f} | Test Loss: {test_loss:.4f} | '
-                      f'Spearman: {spearman_corr:.4f} | Pearson: {pearson_corr:.4f} | R2: {r2:.4f} | '
-                      f'RMSE: {rmse:.4f} | MSE: {mse:.4f} | LR: {optimizer.param_groups[0]["lr"]:.2e}')
-
-                last_path = os.path.join(args.output_dir, 'last_continue_ddp.pth')
-                save_training_checkpoint_unwrapped(last_path, model, optimizer, current_epoch, args, metrics, best_spearman_corr)
-
-                improved = np.isfinite(spearman_corr) and (spearman_corr > best_spearman_corr + args.min_delta)
-                if improved:
-                    best_spearman_corr = spearman_corr
-                    best_epoch = current_epoch
-                    early_stop_counter = 0
-                    checkpoint_path = os.path.join(
-                        args.output_dir,
-                        f'continued_ddp_from_trial_1_epoch_{current_epoch}_spearman_corr_{spearman_corr:.4f}.pth'
+            if current_epoch % 10 == 0:
+                if rank == 0:
+                    raw_model = model.module
+                    mse, rmse, r2, pearson_corr, spearman_corr, test_loss = evaluate_model(
+                        raw_model, test_loader_rank0, device, 0.0, args.max_len,
+                        vocab_info['codon_table'], vocab_info['idx_to_char']
                     )
-                    save_training_checkpoint_unwrapped(checkpoint_path, model, optimizer, current_epoch, args, metrics, best_spearman_corr)
-                    print(f'New best continued DDP model saved: {checkpoint_path}')
-                else:
-                    early_stop_counter += 1
-                    print(f'EarlyStopping counter: {early_stop_counter} out of {args.patience}')
-                    if early_stop_counter >= args.patience:
-                        print(f'Early stopping at epoch {current_epoch}. Best epoch: {best_epoch}, Best Spearman: {best_spearman_corr:.4f}')
-                        stop_training = True
-
-                # Broadcast stopping decision and best score to all ranks.
-                stop_tensor = torch.tensor([1 if stop_training else 0], dtype=torch.int32, device=device)
-                best_tensor = torch.tensor([best_spearman_corr], dtype=torch.float32, device=device)
-            else:
-                stop_tensor = torch.tensor([0], dtype=torch.int32, device=device)
-                best_tensor = torch.tensor([best_spearman_corr], dtype=torch.float32, device=device)
-
-            dist.broadcast(stop_tensor, src=0)
-            dist.broadcast(best_tensor, src=0)
-            best_spearman_corr = float(best_tensor.item())
-            if int(stop_tensor.item()) == 1:
-                break
+                    test_metrics = {
+                        'mse': mse, 'rmse': rmse, 'r2': r2,
+                        'pearson': pearson_corr, 'spearman': spearman_corr,
+                        'test_loss': test_loss, 'train_loss': avg_loss,
+                        'lr': optimizer.param_groups[0]['lr'],
+                    }
+                    writer.add_scalar('Test/Spearman', spearman_corr, current_epoch)
+                    writer.add_scalar('Test/Pearson', pearson_corr, current_epoch)
+                    writer.add_scalar('Test/R2', r2, current_epoch)
+                    writer.add_scalar('Test/MSE', mse, current_epoch)
+                    print(
+                        f'Test at epoch {current_epoch} | Test Loss: {test_loss:.4f} | '
+                        f'Spearman: {spearman_corr:.4f} | Pearson: {pearson_corr:.4f} | '
+                        f'R2: {r2:.4f} | RMSE: {rmse:.4f} | MSE: {mse:.4f}'
+                    )
+                dist.barrier()
 
         if rank == 0:
+            final_path = os.path.join(args.output_dir, 'final_ddp.pth')
+            save_training_checkpoint_unwrapped(
+                final_path, model, optimizer, args.epochs, args,
+                test_metrics, test_metrics['spearman']
+            )
+            print(f'Final-epoch model saved: {final_path}')
             if writer is not None:
                 writer.close()
-            summary_path = os.path.join(args.output_dir, 'continue_training_ddp_summary.txt')
+            summary_path = os.path.join(args.output_dir, 'training_ddp_summary.txt')
             with open(summary_path, 'w') as f:
-                f.write(f'Resume checkpoint: {args.resume_checkpoint}\n')
-                f.write(f'Start epoch: {args.start_epoch}\n')
-                if start_metrics:
-                    f.write(f'Initial Spearman: {start_metrics["spearman"]:.4f}\n')
-                f.write(f'Best continued Spearman: {best_spearman_corr:.4f}\n')
-                f.write(f'Best continued epoch: {best_epoch}\n')
+                f.write('Training initialization: random\n')
+                f.write(f'Final epoch: {args.epochs}\n')
+                f.write(f'Final Spearman: {test_metrics["spearman"]:.4f}\n')
                 f.write(f'World size: {world_size}\n')
                 f.write(f'CUDA_VISIBLE_DEVICES: {os.environ.get("CUDA_VISIBLE_DEVICES")}\n')
                 f.write(f'Output dir: {args.output_dir}\n')
-            print('\nContinued DDP training finished!')
-            print(f'Best continued Spearman: {best_spearman_corr:.4f}')
-            print(f'Best continued epoch: {best_epoch}')
+            print('\nDDP training finished!')
             print(f'Summary saved to: {summary_path}')
 
     finally:
@@ -2052,30 +1901,25 @@ def train_ddp(args):
         torch.cuda.empty_cache()
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Continue training from trial_1_epoch_10_spearman_corr_0.6145.pth using DDP on selected GPUs')
+    parser = argparse.ArgumentParser(description='Train the CDS model from random initialization')
     parser.add_argument('--data_name', type=str, default='mRNA_Stability.csv')
     parser.add_argument('--data_dir', type=str, default='.')
-    parser.add_argument('--resume_checkpoint', type=str, default='./output/trial_1_epoch_10_spearman_corr_0.6145.pth')
-    parser.add_argument('--epochs', type=int, default=40, help='Additional epochs to train after the pretrained checkpoint')
-    parser.add_argument('--start_epoch', type=int, default=10, help='Epoch index encoded in the pretrained checkpoint filename')
+    parser.add_argument('--epochs', type=int, default=40, help='Total training epochs; must be a positive multiple of 10')
     parser.add_argument('--batch_size', type=int, default=64)
-    parser.add_argument('--output_dir', type=str, default='./output_single_gpu_continue')
+    parser.add_argument('--output_dir', type=str, default='./output_training')
     parser.add_argument('--tensorboard_dir', type=str, default='./runs')
     parser.add_argument('--accum_steps', type=int, default=4)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--learning_rate', type=float, default=1e-5, help='Use a smaller LR than pretraining for stable continuation')
+    parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--min_lr', type=float, default=1e-6)
     parser.add_argument('--scheduler_t0', type=int, default=10)
     parser.add_argument('--scheduler_t_mult', type=int, default=2)
     parser.add_argument('--initial_noise_std', type=float, default=0.005)
     parser.add_argument('--max_noise_std', type=float, default=0.05)
-    parser.add_argument('--patience', type=int, default=20)
-    parser.add_argument('--min_delta', type=float, default=1e-6)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--device', type=str, default='cuda:0', help='Use cuda:0 after setting CUDA_VISIBLE_DEVICES to the physical GPU ID')
 
-    # These defaults match the original trial_1 search space used to create trial_1_epoch_10_spearman_corr_0.6145.pth.
     parser.add_argument('--embed_dim', type=int, default=192)
     parser.add_argument('--hidden_dim', type=int, default=384)
     parser.add_argument('--latent_dim', type=int, default=384)
@@ -2086,15 +1930,11 @@ def parse_args():
     parser.add_argument('--num_embeddings', type=int, default=32)
     parser.add_argument('--commitment_cost', type=float, default=0.01)
 
-    parser.add_argument('--train_augmentation', action='store_true', help='Enable random codon mutation augmentation during continued training')
-    parser.add_argument('--resume_optimizer', action='store_true', help='Load optimizer if the checkpoint contains optimizer_state_dict')
-    parser.add_argument('--auto_match_checkpoint', action='store_true', default=True,
-                        help='Infer embed_dim/hidden_dim/latent_dim/max_len from the checkpoint before model construction')
-    parser.add_argument('--no_auto_match_checkpoint', dest='auto_match_checkpoint', action='store_false',
-                        help='Disable automatic checkpoint hyperparameter inference')
-    parser.add_argument('--strict_load', action='store_true', default=True)
-    parser.add_argument('--no_strict_load', dest='strict_load', action='store_false')
-    return parser.parse_args()
+    parser.add_argument('--train_augmentation', action='store_true', help='Enable random codon mutation augmentation during training')
+    args = parser.parse_args()
+    if args.epochs <= 0 or args.epochs % 10 != 0:
+        raise ValueError("--epochs must be a positive multiple of 10")
+    return args
 
 
 

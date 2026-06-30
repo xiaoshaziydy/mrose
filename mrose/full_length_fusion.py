@@ -919,6 +919,9 @@ def train_master_model(
     final_model_path,
     EPOCHS=40,
 ):
+    if EPOCHS <= 0 or EPOCHS % 10 != 0:
+        raise ValueError("EPOCHS must be a positive multiple of 10")
+
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_gpus = torch.cuda.device_count()
 
@@ -1002,6 +1005,7 @@ def train_master_model(
     )
 
     val_metrics = None
+    test_metrics = None
     for epoch in range(EPOCHS):
         model.train()
         train_mse_fus = 0.0
@@ -1097,6 +1101,15 @@ def train_master_model(
                 f"Train MSE: {avg_train_loss:.4f}"
             )
 
+        if (epoch + 1) % 10 == 0:
+            test_metrics = evaluate_regression_model(model, test_loader, DEVICE)
+            print(
+                f"Test at epoch {epoch + 1:02d} | "
+                f"MSE: {test_metrics['mse']:.4f} | "
+                f"Pearson: {test_metrics['pearson']:.4f} | "
+                f"R²: {test_metrics['r2']:.4f}"
+            )
+
         gc.collect()
         if DEVICE.type == "cuda":
             torch.cuda.empty_cache()
@@ -1107,11 +1120,6 @@ def train_master_model(
         else model.state_dict()
     )
     torch.save(state_dict, final_model_path)
-    test_metrics = evaluate_regression_model(model, test_loader, DEVICE)
-    print(
-        f"Final test | MSE: {test_metrics['mse']:.4f} | "
-        f"Pearson: {test_metrics['pearson']:.4f} | R²: {test_metrics['r2']:.4f}"
-    )
     return {"validation": val_metrics, "test": test_metrics}
 
 

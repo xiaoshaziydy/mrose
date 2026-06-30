@@ -826,37 +826,6 @@ def evaluate_model(model, data_loader, vocab, device):
     mae = mean_absolute_error(true_mfe, predicted_mfe)
     return spearman_corr, pearson_corr, r2, rmse, mae, avg_mse_loss
 
-class EarlyStopping:
-    def __init__(self, patience=10, verbose=False):
-        self.patience = patience
-        self.verbose = verbose
-        self.counter = 0
-        self.best_score = None
-        self.early_stop = False
-        
-    def __call__(self, val_loss, model, trial_id):
-        score = -val_loss
-        if self.best_score is None:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model, trial_id)
-        elif score < self.best_score:
-            self.counter += 1
-            if self.verbose:
-                print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_score = score
-            self.counter = 0
-            self.save_checkpoint(val_loss, model, trial_id)
-            
-    def save_checkpoint(self, val_loss, model, trial_id):
-        checkpoint_path = os.path.join(args.output_dir, f'best_model_trial_{trial_id}.pth')
-        torch.save(model.state_dict(), checkpoint_path)
-        if self.verbose:
-            print(f'Spearman improved ({self.best_score:.6f} --> {-val_loss:.6f}). Saving model ...')
-
-
 # ==========================================
 # Main entry point and argument parsing
 # ==========================================
@@ -882,6 +851,8 @@ if __name__ == '__main__':
     parser.add_argument('--max_len', type=int, default=64, help='Max sequence length')
     parser.add_argument('--trial_id', type=int, default=0, help='Trial ID for saving')
     args = parser.parse_args()
+    if args.epochs <= 0 or args.epochs % 10 != 0:
+        raise ValueError("--epochs must be a positive multiple of 10")
 
     # ---------------------------------------------------------
     # New logic: dynamically extract the filename prefix and create a dataset-specific output folder
@@ -906,10 +877,10 @@ if __name__ == '__main__':
     vocab_size = len(vocab)
     
     train_dataset = RNADataset(args.train_file, vocab, is_train=False) 
-    val_dataset = RNADataset(args.test_file, vocab, is_train=False)
+    test_dataset = RNADataset(args.test_file, vocab, is_train=False)
     
     train_loader = get_data_loader(train_dataset, batch_size=args.batch_size, vocab=vocab)
-    val_loader = get_data_loader(val_dataset, batch_size=int(args.batch_size/2), vocab=vocab)
+    test_loader = get_data_loader(test_dataset, batch_size=int(args.batch_size/2), vocab=vocab)
 
     initial_noise_std = 0.01
     max_noise_std = 0.1
@@ -956,9 +927,7 @@ if __name__ == '__main__':
         optimizer = torch.optim.Adam(model.parameters(), lr=params['learning_rate'], weight_decay=1e-5, amsgrad=True)
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1) 
         noise_schedule = cosine_noise_schedule(initial_noise_std, max_noise_std, args.epochs)
-        early_stopping = EarlyStopping(patience=10, verbose=True)
-        
-        trial_best_spearman = -np.inf
+        trial_final_metrics = None
         
         for epoch in range(args.epochs):
             model.train()
@@ -994,38 +963,39 @@ if __name__ == '__main__':
             avg_train_loss = total_loss / num_batches
             writer.add_scalar('Train/Loss', avg_train_loss, epoch)
             
-            spearman_corr, pearson_corr, r2, rmse, mae, avg_mse = evaluate_model(model, val_loader, vocab, device)
-            
-            print(f"Trial {trial_id} | Epoch {epoch+1} | TrainLoss: {avg_train_loss:.4f} | MSE Loss: {avg_mse:.4f} "
-                  f"Spearman: {spearman_corr:.4f} | Pearson: {pearson_corr:.4f} | R²: {r2:.4f}| RMSE: {rmse:.4f} | MAE: {mae:.4f}")
-            
-            writer.add_scalar('Val/Spearman', spearman_corr, epoch)
-            
-            if spearman_corr > trial_best_spearman:
-                trial_best_spearman = spearman_corr
-                param_str = '_'.join([f"{k}{v}" for k, v in params.items()])
-                ckpt_path = os.path.join(trial_dir, f"best_{param_str}_spear{spearman_corr:.4f}_pear{pearson_corr:.4f}_R2{r2:.4f}_RMSE{rmse:.4f}_MAE{mae:.4f}.pth")
-                
-                torch.save({
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'params': params,
-                    'spearman': spearman_corr,
-                    'epoch': epoch + 1
-                }, ckpt_path)
-                print(f" → New best model saved: {ckpt_path}")
-            
-            # The early_stopping arguments are adjusted so the checkpoint is saved under base_output_dir
-            # If your EarlyStopping class uses the global args.output_dir, update the EarlyStopping class accordingly
-            early_stopping(-spearman_corr, model, trial_id)
-            if early_stopping.early_stop:
-                print(f"Trial {trial_id} early stopped at epoch {epoch+1}")
-                break
-                
-        print(f"Trial {trial_id} completed; best Spearman for this trial: {trial_best_spearman:.4f}")
-        
-        if trial_best_spearman > best_spearman:
-            best_spearman = trial_best_spearman
+            print(
+                f"Trial {trial_id} | Epoch {epoch + 1} | "
+                f"TrainLoss: {avg_train_loss:.4f}"
+            )
+
+            if (epoch + 1) % 10 == 0:
+                trial_final_metrics = evaluate_model(model, test_loader, vocab, device)
+                spearman_corr, pearson_corr, r2, rmse, mae, avg_mse = trial_final_metrics
+                print(
+                    f"Test at epoch {epoch + 1} | MSE: {avg_mse:.4f} | "
+                    f"Spearman: {spearman_corr:.4f} | Pearson: {pearson_corr:.4f} | "
+                    f"R²: {r2:.4f} | RMSE: {rmse:.4f} | MAE: {mae:.4f}"
+                )
+                writer.add_scalar('Test/Spearman', spearman_corr, epoch)
+
+        spearman_corr, pearson_corr, r2, rmse, mae, avg_mse = trial_final_metrics
+        param_str = '_'.join([f"{k}{v}" for k, v in params.items()])
+        ckpt_path = os.path.join(
+            trial_dir,
+            f"final_{param_str}_spear{spearman_corr:.4f}_pear{pearson_corr:.4f}_"
+            f"R2{r2:.4f}_RMSE{rmse:.4f}_MAE{mae:.4f}.pth",
+        )
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'params': params,
+            'spearman': spearman_corr,
+            'epoch': args.epochs,
+        }, ckpt_path)
+        print(f"Final-epoch model saved: {ckpt_path}")
+
+        if spearman_corr > best_spearman:
+            best_spearman = spearman_corr
             best_params = params
             best_trial_id = trial_id
             

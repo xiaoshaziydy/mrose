@@ -948,6 +948,8 @@ parser.add_argument('--device', type=str, default="cuda:1", help='Device')
 # Add distributed training arguments
 parser.add_argument('--output_dir', type=str, default='./output', help='Output directory for logs and models')
 args = parser.parse_args ()
+if args.epochs <= 0 or args.epochs % 10 != 0:
+    raise ValueError("--epochs must be a positive multiple of 10")
 print(args)
 # Get distributed training environment variables
 rank = int(os.environ['LOCAL_RANK'])
@@ -995,8 +997,6 @@ for j in range(1, 5):
         args.num_encoder_layers, args.num_decoder_layers, args.num_heads,
         args.num_embeddings, args.commitment_cost, kmer_feature_dim=128
     )
-    pretrained_path = './Model/best_model_rank_2_Fold_0_rep_2_ACC_0.8468_AUC_0.8783_MCC_0.6297_F1_0.7377_AUPRC_0.7700.pth'
-    model.load_state_dict(torch.load(pretrained_path, map_location=device))
     model.to(device)
     model = DDP(
         model, device_ids=[rank], output_device=rank,
@@ -1011,6 +1011,7 @@ for j in range(1, 5):
         optimizer, T_0=5, T_mult=2, eta_min=1e-6
     )
 
+    test_metrics = None
     for epoch in range(args.epochs):
         model.train()
         total_loss = 0.0
@@ -1060,9 +1061,19 @@ for j in range(1, 5):
             f'F1: {val_f1:.4f} | MCC: {val_mcc:.4f}'
         )
 
-    acc, auc, auprc, f1, mcc, class_loss = evaluate_model(
-        model, test_loader, device, rank, world_size
-    )
+        if (epoch + 1) % 10 == 0:
+            test_metrics = evaluate_model(
+                model, test_loader, device, rank, world_size
+            )
+            acc, auc, auprc, f1, mcc, class_loss = test_metrics
+            logger.info(
+                f'Rank {rank} - Fold {j} Test at epoch {epoch + 1} | '
+                f'Loss: {class_loss:.4f} | ACC: {acc:.4f} | '
+                f'AUC: {auc:.4f} | AUPRC: {auprc:.4f} | '
+                f'F1: {f1:.4f} | MCC: {mcc:.4f}'
+            )
+
+    acc, auc, auprc, f1, mcc, class_loss = test_metrics
     if rank == 0:
         os.makedirs('./Model', exist_ok=True)
         model_filename = (

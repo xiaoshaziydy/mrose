@@ -1595,35 +1595,6 @@ def evaluate_model(model, data_loader, device, noise_std, max_len, codon_table, 
     
     return spearman_corr, pearson_corr, r2, rmse, mae, avg_loss
 
-class EarlyStopping:
-    def __init__(self, patience=10, verbose=False):
-        self.patience = patience
-        self.verbose = verbose
-        self.counter = 0
-        self.best_score = None
-        self.early_stop = False
-
-    def __call__(self, val_loss, model):
-        score = -val_loss
-        if self.best_score is None:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model)
-        elif score < self.best_score:
-            self.counter += 1
-            if self.verbose:
-                print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_score = score
-            self.counter = 0
-            self.save_checkpoint(val_loss, model)
-
-    def save_checkpoint(self, val_loss, model):
-        torch.save(model.state_dict(), 'best_model.pth')
-        if self.verbose:
-            print(f'Test loss improved ({self.best_score:.6f} --> {val_loss:.6f}). Saving model ...')
-
 def train_and_evaluate(args,train_csv,test_csv, rank, world_size, device, param_combo, trial_id, logger):
     
     logger.info(f"Trial {trial_id}, Rank {rank}: {param_combo}")
@@ -1721,25 +1692,13 @@ def train_and_evaluate(args,train_csv,test_csv, rank, world_size, device, param_
             nuc_char_to_idx=nuc_char_to_idx
         ).to(device)
 
-        # Synchronize model parameters
-        state_dict_list = [None]
-        if rank == 0:
-            logger.info(f"Rank {rank}: Broadcasting model state for trial {trial_id}")
-            state_dict_list[0] = model.state_dict()
-        dist.barrier()
-        dist.broadcast_object_list(state_dict_list, src=0)
-        model.load_state_dict(state_dict_list[0])
-        dist.barrier()
-        logger.info(f"Rank {rank}: Model state loaded for trial {trial_id}")
-
         model = DDP(model, device_ids=[rank], find_unused_parameters=True)
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=1e-5)
         noise_schedule = cosine_noise_schedule(initial_noise_std=0.01, max_noise_std=0.1, total_epochs=args.epochs)
         lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=param_combo['milestones'], gamma=0.1)
-        early_stopping = EarlyStopping(patience=20, verbose=True)
 
         # Training loop
-        best_spearman = 0.0
+        test_metrics = None
         for epoch in range(args.epochs):
             model.train()
             total_loss = 0.0
@@ -1762,23 +1721,33 @@ def train_and_evaluate(args,train_csv,test_csv, rank, world_size, device, param_
                 if param_group['lr'] < 0.000005:  
                     param_group['lr'] = 0.000005
 
-            # Evaluate model
-            spearman_corr, pearson_corr, r2, rmse, mae, test_loss = evaluate_model(model, test_loader, device, 0, args.max_len, codon_table, idx_to_char)
-            print(f'Epoch {epoch+1}/{args.epochs} | Rank {rank} |'
-                  f'Spearman: {spearman_corr:.4f} | '
-                  f'Pearson: {pearson_corr:.4f} | R2: {r2:.4f} | RMSE: {rmse:.4f} | MAE: {mae:.4f}')
-            early_stopping(-spearman_corr, model.module)
-            if early_stopping.early_stop:
-                logger.info(f"Trial {trial_id}: Early stopping triggered")
-                break
+            logger.info(
+                f'Epoch {epoch + 1}/{args.epochs} | Rank {rank} | '
+                f'Train Loss: {avg_loss:.4f}'
+            )
 
-            if spearman_corr > best_spearman:
-                best_spearman = spearman_corr
-                checkpoint_path = os.path.join(args.output_dir, f'trial_{trial_id}_rank_{rank}_epoch_{epoch+1}_spearman_{spearman_corr:.4f}.pth')
-                torch.save(model.module.state_dict(), checkpoint_path)
-                logger.info(f'Trial {trial_id}: Saved checkpoint: {checkpoint_path}')
+            if (epoch + 1) % 10 == 0:
+                test_metrics = evaluate_model(
+                    model, test_loader, device, 0, args.max_len,
+                    codon_table, idx_to_char
+                )
+                spearman_corr, pearson_corr, r2, rmse, mae, test_loss = test_metrics
+                print(
+                    f'Test at epoch {epoch + 1}/{args.epochs} | Rank {rank} | '
+                    f'Spearman: {spearman_corr:.4f} | Pearson: {pearson_corr:.4f} | '
+                    f'R2: {r2:.4f} | RMSE: {rmse:.4f} | MAE: {mae:.4f}'
+                )
 
-        return best_spearman, spearman_corr, test_loss
+        spearman_corr, pearson_corr, r2, rmse, mae, test_loss = test_metrics
+        if rank == 0:
+            checkpoint_path = os.path.join(
+                args.output_dir,
+                f'trial_{trial_id}_final_epoch_{args.epochs}_spearman_{spearman_corr:.4f}.pth'
+            )
+            torch.save(model.module.state_dict(), checkpoint_path)
+            logger.info(f'Trial {trial_id}: Saved final checkpoint: {checkpoint_path}')
+
+        return spearman_corr, pearson_corr, test_loss
 
 
     except Exception as e:
@@ -1788,7 +1757,7 @@ def train_and_evaluate(args,train_csv,test_csv, rank, world_size, device, param_
 def hyperparameter_search():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_name', type=str, default='promoter_tata', help='Input CSV file containing all splits')
-    parser.add_argument('--epochs', type=int, default=15)
+    parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--output_dir', type=str, default='./output')
     parser.add_argument('--accum_steps', type=int, default=16)
@@ -1800,6 +1769,8 @@ def hyperparameter_search():
     parser.add_argument('--num_embeddings', type=int, default=32)
     parser.add_argument('--commitment_cost', type=float, default=0.01)
     args = parser.parse_args()
+    if args.epochs <= 0 or args.epochs % 10 != 0:
+        raise ValueError("--epochs must be a positive multiple of 10")
 
     # Define hyperparameter search space
     param_grid = {
