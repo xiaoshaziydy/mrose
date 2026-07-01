@@ -5,7 +5,7 @@ Two input modes are supported:
 
 1. **Three-region mode** (default)
    Provide separate FASTA files for 5′ UTR, CDS and 3′ UTR. The script runs each
-   regional generator independently and merges same-rank candidates.
+   regional generator independently and interleaves ranked candidates.
 
 2. **Full-mRNA mode** (--full_mrna_fasta)
    Provide a single FASTA containing a full-length mRNA sequence. The script
@@ -15,7 +15,10 @@ Two input modes are supported:
 
 Composition (both modes):
 
-    full_rank_i = five_utr_rank_i + cds_rank_i + three_utr_rank_i
+    candidate_i = five_utr_rank_i + cds_rank_(i+1) + three_utr_rank_(i+2)
+
+Regional ranks wrap around at ``top_k``. Candidates are then ranked by the
+sum of their three regional ``final_score`` values.
 
 The regional scripts remain the source of model inference and scoring. This
 file only handles orchestration and full-length output assembly.
@@ -25,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import subprocess
 import sys
 import tempfile
@@ -320,28 +324,60 @@ def merge_outputs(args: argparse.Namespace) -> list[dict[str, object]]:
     if merge_count < 1:
         raise ValueError("No full-length candidates could be merged.")
 
+    def score_at(region: str, source_rows: list[dict[str, str]], index: int) -> float:
+        raw_score = source_rows[index].get("final_score", "")
+        try:
+            score = float(raw_score)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{region} candidate rank {index + 1} has an invalid final_score: "
+                f"{raw_score!r}"
+            ) from exc
+        if not math.isfinite(score):
+            raise ValueError(
+                f"{region} candidate rank {index + 1} has a non-finite "
+                f"final_score: {raw_score!r}"
+            )
+        return score
+
     rows: list[dict[str, object]] = []
     for index in range(merge_count):
-        five = five_rows[index]["sequence"].upper().replace("U", "T")
-        cds = cds_rows[index]["sequence"].upper().replace("U", "T")
-        three = three_rows[index]["sequence"].upper().replace("U", "T")
+        five_index = index
+        cds_index = (index + 1) % merge_count
+        three_index = (index + 2) % merge_count
+
+        five = five_rows[five_index]["sequence"].upper().replace("U", "T")
+        cds = cds_rows[cds_index]["sequence"].upper().replace("U", "T")
+        three = three_rows[three_index]["sequence"].upper().replace("U", "T")
         full = five + cds + three
+
+        five_score = score_at("5utr", five_rows, five_index)
+        cds_score = score_at("cds", cds_rows, cds_index)
+        three_score = score_at("3utr", three_rows, three_index)
         rows.append(
             {
-                "rank": index + 1,
+                "rank": 0,
                 "sequence": full,
                 "five_utr_sequence": five,
                 "cds_sequence": cds,
                 "three_utr_sequence": three,
+                "five_utr_source_rank": five_index + 1,
+                "cds_source_rank": cds_index + 1,
+                "three_utr_source_rank": three_index + 1,
                 "five_utr_length": len(five),
                 "cds_length": len(cds),
                 "three_utr_length": len(three),
                 "full_length": len(full),
-                "five_utr_score": five_rows[index].get("final_score", ""),
-                "cds_score": cds_rows[index].get("final_score", ""),
-                "three_utr_score": three_rows[index].get("final_score", ""),
+                "five_utr_score": five_score,
+                "cds_score": cds_score,
+                "three_utr_score": three_score,
+                "total_score": five_score + cds_score + three_score,
             }
         )
+
+    rows.sort(key=lambda row: row["total_score"], reverse=True)
+    for rank, row in enumerate(rows, start=1):
+        row["rank"] = rank
     return rows
 
 
